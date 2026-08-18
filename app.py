@@ -1,780 +1,941 @@
-import textwrap
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import textwrap
 
-# Set page configuration with formal title, wide layout, and light theme
+def _clean_html(html):
+    """Remove indentation from triple-quoted HTML strings.
+
+    Strips leading whitespace on every line (not just the shared
+    indentation) so nested HTML tags never end up with 4+ spaces of
+    indentation left over. Markdown treats any line starting with 4 spaces
+    as a code block, which is why nested <div> content was showing up as
+    raw HTML text instead of being rendered.
+    """
+    dedented = textwrap.dedent(html).strip()
+    return "\n".join(line.lstrip() for line in dedented.splitlines())
+
+
+def render_html(html, unsafe_allow_html=True):
+    st.markdown(
+        _clean_html(html),
+        unsafe_allow_html=unsafe_allow_html,
+    )
+
+
+# Patch st.markdown globally so every call in this file that uses
+# unsafe_allow_html=True (there are 50+ of them, most written with indented
+# multi-line HTML) gets the same cleanup automatically, without having to
+# rewrite every single call site by hand.
+_original_markdown = st.markdown
+
+
+def _patched_markdown(body, *args, **kwargs):
+    unsafe = kwargs.get("unsafe_allow_html", False)
+    if len(args) >= 1:
+        # unsafe_allow_html could have been passed positionally
+        unsafe = args[0]
+    if unsafe and isinstance(body, str) and "\n" in body:
+        body = _clean_html(body)
+    return _original_markdown(body, *args, **kwargs)
+
+
+st.markdown = _patched_markdown
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
+
 st.set_page_config(
     page_title="Dashboard Analisis Manfaat Pensiun DPBNI",
+    page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded"
 )
 
-DATA_PATH = "data/data_pensiunan_clean.csv"
 
+# =========================================================
+# CUSTOM CSS
+# =========================================================
 
-# ==============================================================================
-# ELDERLY-FRIENDLY, HIGH-CONTRAST, WARM ORANGE PALETTE STYLING (CSS)
-# Palette tokens:
-# - Primary Orange:       #EA580C
-# - Mid Orange:           #F97316
-# - Light Orange Accent:  #FB923C
-# - Very Light Orange BG: #FFF7ED
-# - Cream Highlight BG:   #FFFBF5
-# - Main Background:      #FAFAF9
-# - Card Background:      #FFFFFF
-# - Main Text (Dark):     #1C1917
-# - Secondary Text:       #44403C
-# - Muted Text:           #57534E
-# - Border:               #D6D3D1
-# - Success Green:        #16A34A
-# ==============================================================================
 st.markdown(
-    textwrap.dedent(
-        """
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-        /* ── Global Reset & Typography ── */
-        *, *:before, *:after {
-            box-sizing: border-box !important;
-        }
-
-        html, body, [class*="css"] {
-            font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 18px;
-            color: #1C1917;
-            line-height: 1.75;
-        }
-
-        .stApp {
-            background-color: #FAFAF9;
-        }
-
-        /* ── Hero Banner ── */
-        .hero-banner {
-            background: linear-gradient(135deg, #EA580C 0%, #C2410C 100%);
-            padding: 44px 44px 38px 44px;
-            border-radius: 20px;
-            margin-bottom: 36px;
-            box-shadow: 0 12px 32px -6px rgba(234, 88, 12, 0.25);
-            position: relative;
-            overflow: hidden;
-            text-align: center;
-        }
-
-        .hero-banner::before {
-            content: "";
-            position: absolute;
-            top: -40%;
-            right: -10%;
-            width: 340px;
-            height: 340px;
-            background: rgba(255,255,255,0.06);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        .hero-title {
-            text-align: center;
-            color: #FFFFFF;
-            font-size: 2.6rem;
-            font-weight: 800;
-            margin: 0 0 12px 0;
-            line-height: 1.25;
-            letter-spacing: -0.02em;
-        }
-
-        .hero-subtitle {
-            text-align: center;
-            color: rgba(255, 255, 255, 0.92);
-            font-size: 1.2rem;
-            line-height: 1.7;
-            margin-right: auto;
-            margin-left: auto;
-            font-weight: 500;
-            max-width: 720px;
-        }
-
-        .hero-steps {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 8px;
-        }
-
-        .hero-step-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background-color: rgba(255, 255, 255, 0.18);
-            color: #FFFFFF;
-            border: 1.5px solid rgba(255, 255, 255, 0.35);
-            padding: 8px 18px;
-            border-radius: 24px;
-            font-size: 0.95rem;
-            font-weight: 700;
-            backdrop-filter: blur(4px);
-        }
-
-        .hero-step-pill .step-num {
-            background: #FFFFFF;
-            color: #EA580C;
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.85rem;
-            font-weight: 800;
-            flex-shrink: 0;
-        }
-
-        /* ── Section Headers ── */
-        .section-block {
-            margin-top: 48px;
-            margin-bottom: 20px;
-        }
-
-        .section-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .section-number {
-            background: #EA580C;
-            color: #FFFFFF;
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            font-weight: 800;
-            flex-shrink: 0;
-        }
-
-        .section-title {
-            color: #1C1917;
-            font-size: 1.7rem;
-            font-weight: 800;
-            line-height: 1.3;
-        }
-
-        .section-desc {
-            color: #44403C;
-            font-size: 1.1rem;
-            margin-bottom: 24px;
-            line-height: 1.7;
-            max-width: 900px;
-        }
-
-        /* ── Profile Cards ── */
-        .profile-card {
-            background-color: #FFFFFF;
-            border: 2px solid #D6D3D1;
-            border-radius: 16px;
-            padding: 24px 26px;
-            box-shadow: 0 4px 14px -3px rgba(28, 25, 23, 0.06);
-            height: 100%;
-            min-height: 130px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .profile-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 24px -6px rgba(28, 25, 23, 0.10);
-        }
-
-        .profile-card-accent {
-            border-top: 5px solid #EA580C;
-        }
-
-        .profile-label {
-            color: #57534E;
-            font-size: 0.95rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 8px;
-        }
-
-        .profile-value {
-            color: #1C1917;
-            font-size: 1.6rem;
-            font-weight: 800;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            line-height: 1.3;
-        }
-
-        .profile-value-orange {
-            color: #EA580C;
-        }
-
-        /* ── Info / Callout Box ── */
-        .info-callout {
-            background-color: #FFF7ED;
-            border: 2px solid #FB923C;
-            border-left: 6px solid #EA580C;
-            border-radius: 14px;
-            padding: 22px 26px;
-            margin-top: 16px;
-            margin-bottom: 24px;
-            color: #1C1917;
-            font-size: 1.05rem;
-            line-height: 1.7;
-            word-wrap: break-word;
-        }
-
-        .info-callout b {
-            color: #C2410C;
-        }
-
-        /* ── Scheme Comparison Cards ── */
-        .scheme-card {
-            background-color: #FFFFFF;
-            border: 2px solid #D6D3D1;
-            border-radius: 18px;
-            padding: 28px 26px;
-            box-shadow: 0 6px 22px -4px rgba(28, 25, 23, 0.06);
-            height: 100%;
-            min-height: 500px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            overflow: hidden;
-            word-wrap: break-word;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .scheme-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 14px 32px -6px rgba(234, 88, 12, 0.14);
-        }
-
-        .scheme-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-size: 0.92rem;
-            font-weight: 800;
-            margin-bottom: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .badge-a { background-color: #FFF7ED; color: #C2410C; border: 2px solid #FB923C; }
-        .badge-b { background-color: #FFF7ED; color: #9A3412; border: 2px solid #EA580C; }
-        .badge-c { background-color: #F5F5F4; color: #44403C; border: 2px solid #A8A29E; }
-
-        .scheme-title {
-            color: #1C1917;
-            font-size: 1.35rem;
-            font-weight: 800;
-            margin-bottom: 6px;
-            line-height: 1.35;
-        }
-
-        .scheme-explain {
-            color: #57534E;
-            font-size: 1rem;
-            line-height: 1.6;
-            margin-bottom: 18px;
-            font-style: italic;
-        }
-
-        .metric-group {
-            margin-bottom: 16px;
-            padding-bottom: 14px;
-            border-bottom: 1.5px dashed #D6D3D1;
-        }
-
-        .metric-group:last-child {
-            border-bottom: none;
-        }
-
-        .metric-title {
-            color: #44403C;
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
-
-        .metric-big {
-            font-size: 1.8rem;
-            font-weight: 800;
-            line-height: 1.25;
-            margin-bottom: 4px;
-            word-wrap: break-word;
-        }
-
-        .text-orange   { color: #EA580C; }
-        .text-dk-orange { color: #C2410C; }
-        .text-dark      { color: #1C1917; }
-        .text-red       { color: #DC2626; }
-
-        .metric-note {
-            color: #57534E;
-            font-size: 0.95rem;
-            line-height: 1.5;
-        }
-
-        .scheme-total-box {
-            padding: 18px 20px;
-            border-radius: 14px;
-            margin-top: 16px;
-        }
-
-        .scheme-total-box-orange {
-            background-color: #FFF7ED;
-            border: 2px solid #FB923C;
-        }
-
-        .scheme-total-box-neutral {
-            background-color: #F5F5F4;
-            border: 2px solid #D6D3D1;
-        }
-
-        .total-label {
-            font-size: 0.95rem;
-            font-weight: 700;
-        }
-
-        .total-value {
-            font-size: 1.45rem;
-            font-weight: 800;
-            margin-top: 2px;
-        }
-
-        .total-hint {
-            font-size: 0.95rem;
-            color: #57534E;
-            margin-top: 6px;
-            line-height: 1.5;
-        }
-
-        /* ── Winner / Recommendation Card ── */
-        .winner-card {
-            background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
-            border: 3px solid #F97316;
-            border-left: 12px solid #EA580C;
-            border-radius: 20px;
-            padding: 32px 36px;
-            margin-top: 20px;
-            margin-bottom: 28px;
-            box-shadow: 0 10px 30px -6px rgba(234, 88, 12, 0.15);
-            word-wrap: break-word;
-            position: relative;
-        }
-
-        .winner-star {
-            font-size: 2.2rem;
-            margin-bottom: 6px;
-        }
-
-        .winner-tag {
-            color: #C2410C;
-            font-size: 1.05rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 8px;
-        }
-
-        .winner-name {
-            color: #9A3412;
-            font-size: 2.2rem;
-            font-weight: 800;
-            margin-bottom: 12px;
-            line-height: 1.25;
-        }
-
-        .winner-body {
-            color: #1C1917;
-            font-size: 1.15rem;
-            line-height: 1.7;
-        }
-
-        .winner-body b {
-            color: #C2410C;
-        }
-
-        /* ── Ranking Cards ── */
-        .rank-card {
-            background-color: #FFFFFF;
-            border: 2px solid #D6D3D1;
-            border-radius: 16px;
-            padding: 18px 26px;
-            margin-bottom: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            word-wrap: break-word;
-            box-shadow: 0 4px 14px -3px rgba(28, 25, 23, 0.04);
-            transition: transform 0.18s ease, box-shadow 0.18s ease;
-        }
-
-        .rank-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px -4px rgba(28, 25, 23, 0.08);
-        }
-
-        .rank-card-1 {
-            border-left: 6px solid #EA580C;
-            background-color: #FFFBF5;
-        }
-
-        .rank-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 16px;
-            border-radius: 24px;
-            font-weight: 800;
-            font-size: 0.95rem;
-        }
-
-        .rank-badge-1 { background-color: #FFF7ED; color: #C2410C; border: 2px solid #FB923C; }
-        .rank-badge-2 { background-color: #F5F5F4; color: #44403C; border: 2px solid #D6D3D1; }
-        .rank-badge-3 { background-color: #F5F5F4; color: #57534E; border: 2px solid #D6D3D1; }
-
-        .rank-scheme-name {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #1C1917;
-        }
-
-        .rank-amount {
-            font-size: 1.35rem;
-            font-weight: 800;
-            color: #EA580C;
-        }
-
-        /* ── Break-Even Cards ── */
-        .be-card {
-            background-color: #FFFFFF;
-            border: 2px solid #D6D3D1;
-            border-top: 6px solid #F97316;
-            border-radius: 18px;
-            padding: 28px 24px;
-            box-shadow: 0 6px 18px -4px rgba(28, 25, 23, 0.05);
-            min-height: 400px;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            justify-content: space-between;
-            box-sizing: border-box;
-            word-wrap: break-word;
-            overflow: hidden;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .be-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 28px -6px rgba(249, 115, 22, 0.12);
-        }
-
-        .be-num {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background-color: #EA580C;
-            color: #FFFFFF;
-            font-weight: 800;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 14px auto;
-        }
-
-        .be-question {
-            color: #1C1917;
-            font-size: 1.1rem;
-            font-weight: 700;
-            line-height: 1.45;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 12px;
-        }
-
-        .be-divider {
-            width: 70%;
-            height: 3px;
-            background-color: #FB923C;
-            margin: 6px auto 18px auto;
-            border-radius: 3px;
-        }
-
-        .be-value {
-            font-size: 2.4rem;
-            font-weight: 800;
-            color: #EA580C;
-            margin-bottom: 8px;
-            line-height: 1.2;
-        }
-
-        .be-icon {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 14px;
-        }
-
-        .be-explain {
-            color: #44403C;
-            font-size: 1rem;
-            line-height: 1.6;
-            text-align: center;
-        }
-
-        /* ── Chart Guide Box ── */
-        .chart-guide {
-            background-color: #FFF7ED;
-            border: 2px solid #FB923C;
-            border-left: 6px solid #EA580C;
-            border-radius: 14px;
-            padding: 22px 26px;
-            margin-top: 16px;
-            margin-bottom: 24px;
-            color: #1C1917;
-            font-size: 1.05rem;
-            line-height: 1.7;
-        }
-
-        .chart-guide b {
-            color: #C2410C;
-        }
-
-        /* ── Disclaimer Footer ── */
-        .disclaimer-box {
-            background-color: #FFFFFF;
-            border: 2px solid #D6D3D1;
-            border-top: 5px solid #F97316;
-            padding: 24px 28px;
-            border-radius: 16px;
-            color: #44403C;
-            font-size: 1rem;
-            line-height: 1.7;
-        }
-
-        .disclaimer-box b {
-            color: #1C1917;
-        }
-
-        /* ── Sidebar Styling ── */
-        section[data-testid="stSidebar"] {
-            background-color: #FFFBF5;
-            border-right: 2px solid #D6D3D1;
-        }
-
-        section[data-testid="stSidebar"] .stMarkdown h2 {
-            color: #1C1917;
-            font-size: 1.5rem;
-            font-weight: 800;
-        }
-
-        section[data-testid="stSidebar"] .stMarkdown h3 {
-            color: #1C1917;
-            font-size: 1.25rem;
-            font-weight: 800;
-        }
-
-        /* Streamlit Control Overrides — Large Touch Targets */
-        .stSelectbox label, .stSlider label {
-            font-size: 1.15rem !important;
-            font-weight: 800 !important;
-            color: #1C1917 !important;
-        }
-
-        .stSelectbox div[data-baseweb="select"] {
-            border: 2px solid #D6D3D1 !important;
-            border-radius: 12px !important;
-            font-size: 1.1rem !important;
-            min-height: 52px !important;
-        }
-
-        .stSelectbox div[data-baseweb="select"]:focus-within {
-            border-color: #EA580C !important;
-            box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15) !important;
-        }
-
-        .stSlider [data-testid="stThumbValue"] {
-            font-size: 1.1rem !important;
-            font-weight: 700 !important;
-        }
-
-        /* Make slider track thicker */
-        .stSlider [role="slider"] {
-            width: 24px !important;
-            height: 24px !important;
-        }
-
-        /* ── Responsive Adjustments ── */
-        @media (max-width: 992px) {
-            .scheme-card, .be-card, .profile-card {
-                min-height: auto !important;
-                height: auto !important;
-                margin-bottom: 18px !important;
-            }
-            .hero-title {
-                font-size: 2rem !important;
-            }
-            .winner-name {
-                font-size: 1.7rem !important;
-            }
-            .hero-steps {
-                flex-direction: column;
-            }
-        }
-
-        @media (max-width: 640px) {
-            .hero-banner {
-                padding: 28px 22px !important;
-            }
-            .hero-title {
-                font-size: 1.6rem !important;
-            }
-            .hero-subtitle {
-                font-size: 1.05rem !important;
-            }
-            .section-title {
-                font-size: 1.4rem !important;
-            }
-            .rank-card {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
-    </style>
     """
-    ),
+    <style>
+
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    /* ============================================================
+       DESIGN TOKENS
+       - Spacing scale: 4, 8, 12, 16, 20, 24, 32, 40, 48, 56, 64
+       - Border-radius: 8 (pills/tags), 12 (controls), 16 (cards),
+                        20 (scheme-cards), 24 (hero)
+       - Font sizes:  body 18px, label 0.82rem, card-value 1.85rem,
+                      section-title 1.5rem, hero-title 2.2rem
+       ============================================================ */
+
+    :root {
+        --primary-50:  #fff7ed;
+        --primary-100: #ffedd5;
+        --primary-200: #fed7aa;
+        --primary-300: #fdba74;
+        --primary-400: #fb923c;
+        --primary-500: #f97316;
+        --primary-600: #ea580c;
+        --primary-700: #c2410c;
+        --primary-800: #9a3412;
+        --primary-900: #7c2d12;
+
+        --text-dark:   #1c1917;
+        --text-body:   #292524;
+        --text-muted:  #44403c;
+        --text-label:  #78716c;
+
+        --surface:     #ffffff;
+        --surface-alt: #fffbf7;
+        --border:      var(--primary-200);
+        --border-light: #f5ebe0;
+
+        --shadow-sm: 0 1px 2px rgba(154,52,18,0.04);
+        --shadow-md: 0 2px 8px rgba(154,52,18,0.06), 0 1px 3px rgba(154,52,18,0.04);
+        --shadow-lg: 0 8px 24px rgba(154,52,18,0.10), 0 2px 6px rgba(154,52,18,0.04);
+
+        --radius-sm:   8px;
+        --radius-md:  12px;
+        --radius-lg:  16px;
+        --radius-xl:  20px;
+        --radius-xxl: 24px;
+    }
+
+
+    /* ================= BASE ================= */
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 18px;
+        color: var(--text-body);
+        line-height: 1.6;
+    }
+
+    .stApp {
+        background: var(--surface-alt);
+    }
+
+    p, li, span {
+        color: var(--text-body);
+    }
+
+
+    /* ================= HERO ================= */
+
+    .hero-banner {
+        background: linear-gradient(
+            160deg,
+            var(--primary-800) 0%,
+            var(--primary-600) 55%,
+            var(--primary-500) 100%
+        );
+        padding: 48px 40px 44px;
+        border-radius: var(--radius-xxl);
+        margin-bottom: 40px;
+        box-shadow: var(--shadow-lg);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Subtle texture overlay — not glassmorphism, just a hint of depth */
+    .hero-banner::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+            ellipse 70% 50% at 20% 100%,
+            rgba(255,255,255,0.06) 0%,
+            transparent 70%
+        );
+        pointer-events: none;
+    }
+
+    .hero-title {
+        margin: 0;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #ffffff;
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+        position: relative;
+    }
+
+    .hero-subtitle {
+        margin: 16px auto 0 auto;
+        max-width: 680px;
+        font-size: 1.05rem;
+        font-weight: 400;
+        color: var(--primary-100);
+        line-height: 1.75;
+        position: relative;
+    }
+
+    .hero-info {
+        margin-top: 24px;
+        display: inline-block;
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.20);
+        border-radius: var(--radius-md);
+        padding: 12px 24px;
+        color: #ffffff;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        position: relative;
+    }
+
+
+    /* ================= SECTION ================= */
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--text-dark);
+        margin-top: 40px;
+        margin-bottom: 20px;
+        letter-spacing: -0.01em;
+        line-height: 1.3;
+    }
+
+    .section-note {
+        color: var(--text-muted);
+        font-size: 1rem;
+        line-height: 1.7;
+        margin-bottom: 24px;
+    }
+
+
+    /* ================= METRIC CARD ================= */
+
+    .metric-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-md);
+        min-height: 120px;
+        transition: box-shadow 0.2s ease;
+    }
+
+    .metric-card:hover {
+        box-shadow: var(--shadow-lg);
+    }
+
+    .metric-label {
+        color: var(--text-label);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .metric-value {
+        color: var(--text-dark);
+        font-size: 1.85rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+    }
+
+    .metric-description {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        margin-top: 8px;
+        line-height: 1.6;
+    }
+
+
+    /* ================= SCHEME CARD ================= */
+
+    .scheme-card {
+        background: var(--surface);
+        border-radius: var(--radius-xl);
+        padding: 28px 24px;
+        min-height: 340px;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--border);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .scheme-card:hover {
+        box-shadow: var(--shadow-lg);
+    }
+
+    .scheme-blue {
+        border-top: 5px solid var(--primary-400);
+    }
+
+    .scheme-orange {
+        border-top: 5px solid var(--primary-600);
+    }
+
+    .scheme-purple {
+        border-top: 5px solid var(--primary-800);
+    }
+
+    .scheme-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        margin-bottom: 16px;
+        letter-spacing: -0.005em;
+    }
+
+    .scheme-blue .scheme-title {
+        color: var(--primary-500);
+    }
+
+    .scheme-orange .scheme-title {
+        color: var(--primary-700);
+    }
+
+    .scheme-purple .scheme-title {
+        color: var(--primary-900);
+    }
+
+    .scheme-label {
+        color: var(--text-label);
+        font-size: 0.82rem;
+        font-weight: 600;
+        margin-top: 16px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .scheme-value {
+        color: var(--text-dark);
+        font-size: 1.4rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    .scheme-description {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.7;
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-light);
+    }
+
+
+    /* ================= INSIGHT ================= */
+
+    .insight-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-md);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .insight-card:hover {
+        box-shadow: var(--shadow-lg);
+    }
+
+    .insight-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text-label);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .insight-main {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--primary-700);
+        margin-top: 8px;
+        letter-spacing: -0.01em;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .insight-text {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.75;
+        margin-top: 12px;
+    }
+
+
+    /* ================= INFO / WARNING / SUCCESS BOX ================= */
+
+    .info-box {
+        background: var(--primary-50);
+        border: 1px solid var(--primary-200);
+        border-left: 4px solid var(--primary-400);
+        border-radius: var(--radius-lg);
+        padding: 20px 24px;
+        color: var(--primary-900);
+        font-size: 1rem;
+        line-height: 1.75;
+        margin: 16px 0;
+    }
+
+    .warning-box {
+        background: #fffbf0;
+        border: 1px solid var(--primary-300);
+        border-left: 4px solid var(--primary-500);
+        border-radius: var(--radius-lg);
+        padding: 20px 24px;
+        color: var(--primary-900);
+        font-size: 1rem;
+        line-height: 1.75;
+        margin: 16px 0;
+    }
+
+    .success-box {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-left: 4px solid #22c55e;
+        border-radius: var(--radius-lg);
+        padding: 20px 24px;
+        color: #14532d;
+        font-size: 1rem;
+        line-height: 1.75;
+        margin: 16px 0;
+    }
+
+
+    /* ================= SIDEBAR ================= */
+
+    section[data-testid="stSidebar"] {
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+    }
+
+    section[data-testid="stSidebar"] h2 {
+        color: var(--primary-800);
+        font-weight: 800;
+        font-size: 1.3rem;
+        letter-spacing: -0.01em;
+    }
+
+    section[data-testid="stSidebar"] h3 {
+        color: var(--primary-700);
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    section[data-testid="stSidebar"] label {
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        color: var(--text-dark) !important;
+    }
+
+    section[data-testid="stSidebar"] p {
+        font-size: 1rem !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* Sidebar caption / info more readable */
+    section[data-testid="stSidebar"] .stCaption,
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        font-size: 0.92rem !important;
+        color: var(--text-muted) !important;
+    }
+
+
+    /* ============ ELDERLY-FRIENDLY: LARGER TOUCH TARGETS & CONTROLS ============ */
+
+    /* Selectbox & input: min 48px height for easy tapping */
+    div[data-baseweb="select"] > div,
+    .stTextInput input,
+    .stNumberInput input {
+        font-size: 1.1rem !important;
+        min-height: 48px !important;
+        border-radius: var(--radius-md) !important;
+        border: 1.5px solid var(--primary-300) !important;
+    }
+
+    div[data-baseweb="select"] > div:focus-within,
+    .stTextInput input:focus,
+    .stNumberInput input:focus {
+        border-color: var(--primary-500) !important;
+        box-shadow: 0 0 0 2px rgba(249,115,22,0.15) !important;
+    }
+
+    /* Slider: larger track & thumb, orange theme */
+    .stSlider [data-baseweb="slider"] > div > div {
+        background: var(--primary-400) !important;
+        height: 8px !important;
+    }
+
+    .stSlider [role="slider"] {
+        width: 28px !important;
+        height: 28px !important;
+        background-color: var(--primary-600) !important;
+        border: 3px solid #ffffff !important;
+        box-shadow: 0 2px 8px rgba(154, 52, 18, 0.30) !important;
+    }
+
+    .stSlider label {
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        color: var(--text-dark) !important;
+    }
+
+    /* General buttons: large, high-contrast, orange */
+    .stButton > button,
+    .stDownloadButton > button {
+        background: var(--primary-600) !important;
+        color: #ffffff !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding: 12px 28px !important;
+        border-radius: var(--radius-md) !important;
+        border: none !important;
+        min-height: 48px !important;
+        transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        background: var(--primary-700) !important;
+        box-shadow: 0 4px 12px rgba(194,65,12,0.25) !important;
+    }
+
+    .stButton > button:active,
+    .stDownloadButton > button:active {
+        background: var(--primary-800) !important;
+    }
+
+    /* Tabs: larger touch area */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding: 14px 24px !important;
+        min-height: 48px !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        color: var(--primary-700) !important;
+        border-bottom: 3px solid var(--primary-600) !important;
+    }
+
+    /* Dataframe / table: larger text */
+    div[data-testid="stDataFrame"] {
+        font-size: 1rem !important;
+        border-radius: var(--radius-lg) !important;
+        overflow: hidden;
+    }
+
+    /* General Streamlit headings */
+    h1 {
+        color: var(--text-dark);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+
+    h2 {
+        color: var(--text-dark);
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+
+    h3 {
+        color: var(--text-dark);
+        font-weight: 700;
+        font-size: 1.25rem;
+    }
+
+    /* Caption: slightly enlarged for readability */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        font-size: 0.92rem !important;
+        color: var(--text-muted) !important;
+        line-height: 1.6 !important;
+    }
+
+    /* Built-in st.metric: orange theme */
+    div[data-testid="stMetricValue"] {
+        color: var(--primary-700) !important;
+        font-size: 1.85rem !important;
+        font-weight: 800 !important;
+    }
+
+    div[data-testid="stMetricLabel"] {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* Progress bar & spinner: orange theme */
+    .stProgress > div > div > div > div {
+        background-color: var(--primary-500) !important;
+    }
+
+    /* Number input: larger +/- buttons for elderly */
+    .stNumberInput button {
+        min-width: 44px !important;
+        min-height: 44px !important;
+    }
+
+
+    /* ============ EQUAL-HEIGHT CARDS IN ROWS ============ */
+
+    div[data-testid*="HorizontalBlock"] {
+        align-items: stretch !important;
+        gap: 16px;
+    }
+
+    div[data-testid*="HorizontalBlock"] > div {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    div[data-testid*="HorizontalBlock"] > div > div,
+    div[data-testid*="HorizontalBlock"] > div > div > div,
+    div[data-testid*="HorizontalBlock"] > div > div > div > div,
+    div[data-testid*="HorizontalBlock"] > div > div > div > div > div,
+    div[data-testid*="HorizontalBlock"] > div > div > div > div > div > div,
+    div[data-testid*="HorizontalBlock"] > div > div > div > div > div > div > div {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        width: 100%;
+    }
+
+    .metric-card,
+    .scheme-card,
+    .insight-card,
+    .info-box,
+    .warning-box,
+    .success-box {
+        flex: 1 1 auto !important;
+        height: 100%;
+        display: flex !important;
+        flex-direction: column !important;
+        box-sizing: border-box;
+    }
+
+    /* Description pushed flush to the bottom of the card so all
+       three scheme cards (MPB/Mix/MPS) align on the same baseline,
+       regardless of how many label/value rows sit above it. */
+    .scheme-description {
+        margin-top: auto;
+        flex: 0 0 auto;
+    }
+
+    /* Last child in insight-card pushes down for alignment */
+    .insight-text {
+        flex: 1 1 auto;
+    }
+
+
+    /* ============ DIVIDER STYLING ============ */
+
+    hr {
+        border: none;
+        border-top: 1px solid var(--border-light);
+        margin: 32px 0;
+    }
+
+
+    /* ============ PLOTLY CHART CONTAINER ============ */
+
+    div[data-testid="stPlotlyChart"] {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 8px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
 
-# ==============================================================================
-# BUSINESS LOGIC & CALCULATION HELPERS (100% PRESERVED)
-# ==============================================================================
+# =========================================================
+# CONFIG
+# =========================================================
+
+DATA_PATH = "data/data_pensiunan_clean.csv"
+
+# Parameter dari mentor
+MONTHLY_GROWTH = 0.03
+BHR_ANNUAL = 5_000_000
+
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+
 def rupiah(value):
-    """Formats numeric values into Indonesian Rupiah standard (Rp X.XXX.XXX)."""
     if value is None or pd.isna(value):
         return "Rp0"
-    return f"Rp{float(value):,.0f}".replace(",", ".")
+
+    return f"Rp{value:,.0f}".replace(",", ".")
 
 
 def num(value):
-    """Converts input value to numeric safely."""
     return pd.to_numeric(value, errors="coerce")
 
 
-def safe_float(value):
-    """Safely extracts a float value, defaulting to 0.0 if invalid/NaN."""
-    value = num(value)
-    return 0.0 if pd.isna(value) else float(value)
-
-
 def find_col(df, candidates):
-    """Finds the first existing column in dataframe from candidate names."""
+    """
+    Mencari nama kolom berdasarkan beberapa kemungkinan nama.
+    Exact match terlebih dahulu, kemudian case-insensitive.
+    """
+
     for col in candidates:
         if col in df.columns:
             return col
+
+    normalized = {
+        str(col).strip().upper(): col
+        for col in df.columns
+    }
+
+    for candidate in candidates:
+        key = str(candidate).strip().upper()
+
+        if key in normalized:
+            return normalized[key]
+
     return None
 
 
-def break_even_mpb_mix(mpb, mix_monthly, mix_lump):
-    """Calculates break-even period (in years) between MPB 100% and Mix scheme."""
-    difference = mpb - mix_monthly
-    if difference <= 0:
-        return None
-    return mix_lump / (difference * 12)
+def safe_float(value):
+    value = num(value)
 
-
-def break_even_mpb_mps(mpb, mps):
-    """Calculates break-even period (in years) between MPB 100% and MPS 100% scheme."""
-    if mpb <= 0:
-        return None
-    return mps / (mpb * 12)
-
-
-def break_even_mix_mps(mix_lump, mix_monthly, mps):
-    """Calculates break-even period (in years) between Mix scheme and MPS 100% scheme."""
-    if mix_monthly <= 0:
-        return None
-
-    remaining = mps - mix_lump
-
-    if remaining <= 0:
+    if pd.isna(value):
         return 0.0
 
-    return remaining / (mix_monthly * 12)
+    return float(value)
 
 
-def simulation(mpb, mix_lump, mix_monthly, mps, max_year=30):
-    """Generates annual cumulative pension benefit data for simulation graph."""
+# =========================================================
+# SIMULATION ENGINE
+# =========================================================
+
+def simulate_by_age(
+    retirement_age,
+    target_age,
+    mpb_initial,
+    mix_lump,
+    mix_monthly_initial,
+    mps,
+    monthly_growth=0.03,
+    bhr_annual=5_000_000,
+):
+    """
+    Simulasi berdasarkan usia.
+
+    Asumsi:
+    - MPB mulai dari nilai manfaat bulanan pada data.
+    - Mix mulai dari manfaat bulanan 80% pada data.
+    - MPB dan Mix bulanan naik 3% setiap bulan.
+    - BHR Rp5 juta diberikan setiap 12 bulan untuk MPB dan Mix.
+    - MPS diterima sekaligus pada awal.
+    """
+
+    retirement_age = float(retirement_age)
+    target_age = float(target_age)
+
+    if target_age <= retirement_age:
+        return pd.DataFrame(
+            [{
+                "Usia": retirement_age,
+                "Bulan": 0,
+                "MPB Bulanan": mpb_initial,
+                "Mix Bulanan": mix_monthly_initial,
+                "BHR MPB": 0,
+                "BHR Mix": 0,
+                "MPB Kumulatif": 0,
+                "Mix Kumulatif": mix_lump,
+                "MPS Kumulatif": mps,
+            }]
+        )
+
+    total_months = int(round((target_age - retirement_age) * 12))
+
     rows = []
 
-    for year in range(max_year + 1):
+    mpb_total = 0.0
+    mix_total = mix_lump
+
+    for month in range(1, total_months + 1):
+
+        # Pertumbuhan bulanan 3%
+        mpb_monthly = (
+            mpb_initial *
+            ((1 + monthly_growth) ** (month - 1))
+        )
+
+        mix_monthly = (
+            mix_monthly_initial *
+            ((1 + monthly_growth) ** (month - 1))
+        )
+
+        # BHR diberikan setiap 12 bulan
+        bhr_mpb = bhr_annual if month % 12 == 0 else 0
+        bhr_mix = bhr_annual if month % 12 == 0 else 0
+
+        mpb_total += mpb_monthly + bhr_mpb
+        mix_total += mix_monthly + bhr_mix
+
+        current_age = retirement_age + (month / 12)
+
         rows.append(
             {
-                "Tahun": year,
-                "Pilihan A (MPB 100% Bulanan)": mpb * 12 * year,
-                "Pilihan B (Mix 20% + 80%)": mix_lump + mix_monthly * 12 * year,
-                "Pilihan C (MPS 100% Sekaligus)": mps,
+                "Usia": current_age,
+                "Bulan": month,
+                "MPB Bulanan": mpb_monthly,
+                "Mix Bulanan": mix_monthly,
+                "BHR MPB": bhr_mpb,
+                "BHR Mix": bhr_mix,
+                "MPB Kumulatif": mpb_total,
+                "Mix Kumulatif": mix_total,
+                "MPS Kumulatif": mps,
             }
         )
 
     return pd.DataFrame(rows)
 
 
-# ==============================================================================
-# DATA LOADING & COLUMN MAPPING (100% PRESERVED)
-# ==============================================================================
+# =========================================================
+# BREAK EVEN BY AGE
+# =========================================================
+
+def find_break_even_age(
+    sim_df,
+    column_a,
+    column_b,
+    retirement_age,
+):
+    """
+    Mencari usia pertama ketika column_a >= column_b.
+    """
+
+    if sim_df.empty:
+        return None
+
+    condition = sim_df[column_a] >= sim_df[column_b]
+
+    matching = sim_df.loc[condition]
+
+    if matching.empty:
+        return None
+
+    return float(matching.iloc[0]["Usia"])
+
+
+# =========================================================
+# LOAD DATA
+# =========================================================
+
 @st.cache_data
 def load_data():
+
     df = pd.read_csv(DATA_PATH)
 
+    # Konversi kolom numerik
     for col in df.columns:
-        converted = pd.to_numeric(df[col], errors="coerce")
-        if converted.notna().sum() >= max(1, int(len(df) * 0.7)):
+
+        converted = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        )
+
+        if converted.notna().sum() >= max(
+            1,
+            int(len(df) * 0.7)
+        ):
             df[col] = converted
 
     return df
 
 
 try:
+
     df = load_data()
+
 except FileNotFoundError:
+
     st.error(
-        f"File data tidak ditemukan: {DATA_PATH}. "
-        "Pastikan folder data dan file CSV tersedia di direktori proyek."
+        f"File tidak ditemukan: {DATA_PATH}"
     )
+
+    st.info(
+        "Pastikan struktur folder seperti berikut:\n\n"
+        "project/\n"
+        "├── app.py\n"
+        "└── data/\n"
+        "    └── data_pensiunan_clean.csv"
+    )
+
     st.stop()
+
 except Exception as e:
-    st.error(f"Gagal membaca file CSV: {e}")
+
+    st.error(
+        f"Gagal membaca CSV: {e}"
+    )
+
     st.stop()
 
 
-# Column Mapping Candidates
-COL_NO = find_col(df, ["NO", "No", "no"])
-COL_PHDP = find_col(df, ["PHDP", "PhDP", "phdp"])
-COL_USIA = find_col(df, ["USIA", "Usia", "usia"])
-COL_MK = find_col(df, ["TH_MK", "th_mk", "Masa Kerja"])
+# =========================================================
+# COLUMN MAPPING
+# =========================================================
+
+COL_NO = find_col(
+    df,
+    [
+        "NO",
+        "No",
+        "no",
+        "NOMOR PESERTA",
+        "NO PESERTA",
+    ]
+)
+
+
+COL_PHDP = find_col(
+    df,
+    [
+        "PHDP",
+        "PhDP",
+        "phdp",
+    ]
+)
+
+
+COL_USIA = find_col(
+    df,
+    [
+        "USIA",
+        "Usia",
+        "usia",
+    ]
+)
+
+
+COL_MK = find_col(
+    df,
+    [
+        "TH_MK",
+        "th_mk",
+        "TH MK",
+        "Masa Kerja",
+        "MASA KERJA",
+    ]
+)
+
 
 COL_IURAN = find_col(
     df,
@@ -785,8 +946,13 @@ COL_IURAN = find_col(
         "TOTAL_IURAN",
         "AKUMULASI_IURAN",
         "IURAN_PESERTA",
-    ],
+    ]
 )
+
+
+# =========================================================
+# MPB 100%
+# =========================================================
 
 COL_MPB = find_col(
     df,
@@ -796,8 +962,15 @@ COL_MPB = find_col(
         "PEN_100_PERSEN_D",
         "MPB",
         "MPB_100_PERSEN",
-    ],
+        "MPB 100%",
+        "MPB 100% BULANAN",
+    ]
 )
+
+
+# =========================================================
+# MIX 20%
+# =========================================================
 
 COL_MIX_LUMP = find_col(
     df,
@@ -806,8 +979,16 @@ COL_MIX_LUMP = find_col(
         "MPS_20_PERSEN_E",
         "MPS_20",
         "MIX_20",
-    ],
+        "MIX 20",
+        "20% SEKALIGUS",
+        "MPS 20% MIX",
+    ]
 )
+
+
+# =========================================================
+# MIX 80%
+# =========================================================
 
 COL_MIX_MONTHLY = find_col(
     df,
@@ -816,8 +997,16 @@ COL_MIX_MONTHLY = find_col(
         "PEN_80_PERSEN_F",
         "MP_80_PERSEN",
         "MIX_80",
-    ],
+        "MIX 80",
+        "80% BULANAN",
+        "MP 80% MIX",
+    ]
 )
+
+
+# =========================================================
+# MPS 100%
+# =========================================================
 
 COL_MPS = find_col(
     df,
@@ -826,14 +1015,23 @@ COL_MPS = find_col(
         "MPS_100_PERSEN",
         "MPS_100",
         "MPS",
-    ],
+        "MPS_100_PCT",
+        "MPS_100_X_PCT_IURAN",
+        "MPS 100%",
+        "MPS 100% SEKALIGUS",
+        "PENSIUN SEKALIGUS",
+    ]
 )
 
 
-# Column Validation Check
+# =========================================================
+# VALIDATION
+# =========================================================
+
 required = {
-    "Nomor Peserta (NO)": COL_NO,
+    "Nomor Peserta": COL_NO,
     "PHDP": COL_PHDP,
+    "Usia": COL_USIA,
     "Masa Kerja": COL_MK,
     "MPB 100% Bulanan": COL_MPB,
     "MPS 20% Mix": COL_MIX_LUMP,
@@ -841,679 +1039,2548 @@ required = {
     "MPS 100% Sekaligus": COL_MPS,
 }
 
-missing = [name for name, col in required.items() if col is None]
+
+missing = [
+    name
+    for name, col in required.items()
+    if col is None
+]
+
 
 if missing:
-    st.error("Kolom penting berikut belum ditemukan pada file data CSV:")
+
+    st.error(
+        "Kolom penting berikut belum ditemukan di CSV:"
+    )
+
     for item in missing:
         st.write(f"- {item}")
-    st.info("Kolom yang tersedia pada CSV: " + ", ".join(df.columns.astype(str)))
+
+    st.info(
+        "Kolom yang tersedia pada CSV:"
+    )
+
+    st.code(
+        ", ".join(
+            str(col)
+            for col in df.columns
+        )
+    )
+
     st.stop()
 
 
-# ==============================================================================
-# SIDEBAR CONTROLS
-# ==============================================================================
-with st.sidebar:
-    st.markdown("## Kontrol Simulasi")
-    st.markdown(
-        "<p style='color: #44403C; font-size: 1.05rem; line-height: 1.65;'>"
-        "Pilih nomor peserta dan atur berapa tahun simulasi yang ingin dilihat.</p>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-    # Participant Selection
-    participant_values = df[COL_NO].dropna().tolist()
-    formatted_options = {val: f"Peserta No. {int(val) if isinstance(val, (int, float)) and float(val).is_integer() else val}" for val in participant_values}
+with st.sidebar:
+
+    st.markdown("## Kontrol Simulasi")
+
+    st.caption(
+        "Pilih peserta dan usia tujuan untuk melihat "
+        "estimasi penerimaan manfaat pensiun."
+    )
+
+    participant_values = (
+        df[COL_NO]
+        .dropna()
+        .tolist()
+    )
 
     selected_no = st.selectbox(
-        "Pilih Nomor Peserta Pensiun:",
-        options=participant_values,
-        format_func=lambda x: formatted_options.get(x, str(x)),
-        help="Klik untuk memilih nomor peserta pensiunan yang ingin dianalisis data manfaatnya."
+        "Nomor Peserta",
+        participant_values,
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    participant_rows = df[
+        df[COL_NO] == selected_no
+    ]
 
-    # Simulation Year Horizon Slider
-    simulation_year = st.slider(
-        "Lama Jangka Waktu Simulasi (Tahun):",
-        min_value=1,
-        max_value=30,
-        value=20,
+    if participant_rows.empty:
+        st.error("Data peserta tidak ditemukan.")
+        st.stop()
+
+    participant_sidebar = participant_rows.iloc[0]
+
+    retirement_age_sidebar = safe_float(
+        participant_sidebar[COL_USIA]
+    )
+
+    if retirement_age_sidebar <= 0:
+        retirement_age_sidebar = 55
+
+    min_target_age = int(
+        max(
+            retirement_age_sidebar,
+            1
+        )
+    )
+
+    max_target_age = max(
+        min_target_age + 1,
+        100
+    )
+
+    default_target_age = min(
+        min_target_age + 10,
+        max_target_age
+    )
+
+    target_age = st.slider(
+        "Usia Tujuan",
+        min_value=min_target_age,
+        max_value=max_target_age,
+        value=default_target_age,
         step=1,
-        help="Geser tombol ini untuk melihat estimasi total uang yang akan diterima dalam kurun waktu 1 sampai 30 tahun.",
+        help=(
+            "Pilih usia yang ingin dianalisis. "
+            "Contoh: jika usia pensiun 55 tahun dan "
+            "usia tujuan 65 tahun, dashboard menghitung "
+            "penerimaan selama periode usia 55 sampai 65 tahun."
+        ),
     )
 
     st.markdown(
-        f"<div style='background-color: #FFF7ED; border: 2px solid #FB923C; padding: 14px 18px; "
-        f"border-radius: 14px; margin-top: 12px; color: #C2410C; font-weight: 700; font-size: 1.05rem;'>"
-        f"Durasi Terpilih: <b>{simulation_year} Tahun</b> masa pensiun</div>",
-        unsafe_allow_html=True
+        f"""
+        <div class="info-box">
+            <b>Periode Analisis</b><br>
+            Usia {retirement_age_sidebar:.0f}
+            → Usia {target_age}
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.divider()
 
-    st.markdown("### 📖 Panduan Ringkas Skema")
+    st.markdown("### Asumsi Perhitungan")
+
     st.markdown(
-        textwrap.dedent(
-            """
-        <div style="font-size: 1.02rem; line-height: 1.7; color: #44403C;">
-        <b style="color: #EA580C;">1. Pilihan A — Full Bulanan</b><br>
-        Uang pensiun diterima secara rutin 100% setiap bulan.<br><br>
+        f"""
+        <div style="
+            color:#44403c;
+            font-size:0.95rem;
+            line-height:1.75;
+        ">
+        <b>3% per bulan</b><br>
+        Manfaat bulanan MPB dan Mix meningkat
+        3% setiap bulan.
 
-        <b style="color: #C2410C;">2. Pilihan B — Kombinasi 20%+80%</b><br>
-        20% cair tunai di awal pensiun, dan 80% sisanya dibayar bulanan.<br><br>
+        <b>BHR Rp5 juta/tahun</b><br>
+        Bantuan Hari Raya sebesar Rp5.000.000
+        diberikan setiap tahun untuk MPB dan Mix.<br><br>
 
-        <b style="color: #44403C;">3. Pilihan C — Full Sekaligus</b><br>
-        100% uang pensiun diambil tunai di awal. Tidak ada lagi gaji bulanan.
+        <b>MPS</b><br>
+        Dibayarkan sekaligus di awal dan tidak
+        mendapatkan BHR.
         </div>
-        """
-        ),
-        unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True,
     )
 
 
-# Extract Participant Record
-participant_rows = df[df[COL_NO] == selected_no]
+# =========================================================
+# SELECT PARTICIPANT
+# =========================================================
+
+participant_rows = df[
+    df[COL_NO] == selected_no
+]
 
 if participant_rows.empty:
-    st.error("Data peserta tidak ditemukan.")
+
+    st.error(
+        "Data peserta tidak ditemukan."
+    )
+
     st.stop()
+
 
 participant = participant_rows.iloc[0]
 
 
-# ==============================================================================
-# MAIN DASHBOARD CONTENT AREA
-# ==============================================================================
+# =========================================================
+# GET BASIC DATA
+# =========================================================
 
-# ── HERO HEADER ──
-st.markdown(
-    (
-        '<div class="hero-banner">'
-        '<div class="hero-title">Dashboard Analisis Manfaat Pensiun DPBNI</div>'
-        '<div class="hero-subtitle">'
-        "Selamat datang, Bapak/Ibu. Halaman ini dirancang khusus untuk membantu Anda "
-        "melihat estimasi penerimaan uang pensiun dan memilih skema pembayaran yang "
-        "paling menguntungkan sesuai kebutuhan masa depan."
-        "</div>"
-        '<div class="hero-steps">'
-        '<span class="hero-step-pill">Profil Diri</span>'
-        '<span class="hero-step-pill">Perbandingan Skema</span>'
-        '<span class="hero-step-pill">Rekomendasi Pilihan</span>'
-        '<span class="hero-step-pill">Titik Impas</span>'
-        '<span class="hero-step-pill">Grafik Simulasi</span>'
-        '</div>'
-        "</div>"
-    ),
-    unsafe_allow_html=True,
+retirement_age = safe_float(
+    participant[COL_USIA]
+)
+
+masa_kerja = safe_float(
+    participant[COL_MK]
+)
+
+phdp = safe_float(
+    participant[COL_PHDP]
 )
 
 
-# ── SECTION 1: PARTICIPANT PROFILE ──
+# =========================================================
+# GET BENEFIT DATA
+# =========================================================
+
+mpb = safe_float(
+    participant[COL_MPB]
+)
+
+mix_lump = safe_float(
+    participant[COL_MIX_LUMP]
+)
+
+mix_monthly = safe_float(
+    participant[COL_MIX_MONTHLY]
+)
+
+mps = safe_float(
+    participant[COL_MPS]
+)
+
+
+# =========================================================
+# HERO
+# =========================================================
+
+render_html(
+    f"""
+    <div class="hero-banner">
+
+        <div class="hero-title">
+            Dashboard Analisis Manfaat Pensiun DPBNI
+        </div>
+
+        <div class="hero-subtitle">
+            Dashboard analitik untuk melihat perkembangan
+            manfaat pensiun berdasarkan usia, dengan
+            memperhitungkan kenaikan manfaat bulanan 3%
+            dan Bantuan Hari Raya sebesar Rp5 juta per tahun.
+        </div>
+
+        <div class="hero-info">
+            Peserta No {selected_no}
+            &nbsp;|&nbsp;
+            Usia Pensiun {retirement_age:.0f} Tahun
+            &nbsp;|&nbsp;
+            Estimasi Usia {target_age} Tahun
+        </div>
+
+    </div>
+    """,
+)
+
+
+# =========================================================
+# PROFILE
+# =========================================================
+
 st.markdown(
-    '<div class="section-block">'
-    '<div class="section-label">'
-    '<span class="section-number">1</span>'
-    '<span class="section-title">Data Diri & Gaji Dasar Pensiun Anda</span>'
-    '</div>'
-    '</div>',
+    '<div class="section-title">Profil Peserta</div>',
     unsafe_allow_html=True
 )
-st.markdown(
-    '<div class="section-desc">'
-    'Berikut adalah rincian data kepesertaan dan <b>Penghasilan Dasar Perhitungan Pensiun (PHDP)</b> Bapak/Ibu. '
-    'PHDP adalah besaran gaji pokok terakhir yang dijadikan dasar patokan resmi untuk menghitung manfaat pensiun Anda.'
-    '</div>',
-    unsafe_allow_html=True
+
+
+c1, c2, c3, c4 = st.columns(4)
+
+
+with c1:
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                No. Peserta
+            </div>
+
+            <div class="metric-value">
+                {participant[COL_NO]}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c2:
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Usia Pensiun
+            </div>
+
+            <div class="metric-value">
+                {retirement_age:.1f} Tahun
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c3:
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                Masa Kerja
+            </div>
+
+            <div class="metric-value">
+                {masa_kerja:.1f} Tahun
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c4:
+
+    st.markdown(
+        f"""
+        <div class="metric-card">
+
+            <div class="metric-label">
+                PHDP
+            </div>
+
+            <div class="metric-value">
+                {rupiah(phdp)}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# SIMULATION
+# =========================================================
+
+sim_df = simulate_by_age(
+    retirement_age=retirement_age,
+    target_age=target_age,
+    mpb_initial=mpb,
+    mix_lump=mix_lump,
+    mix_monthly_initial=mix_monthly,
+    mps=mps,
+    monthly_growth=MONTHLY_GROWTH,
+    bhr_annual=BHR_ANNUAL,
 )
 
-col_p1, col_p2, col_p3, col_p4 = st.columns(4)
 
-with col_p1:
-    disp_no = int(selected_no) if isinstance(selected_no, (int, float)) and float(selected_no).is_integer() else selected_no
-    st.markdown(
-        f"""
-        <div class="profile-card">
-            <div class="profile-label">Nomor Peserta</div>
-            <div class="profile-value">No. {disp_no}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# =========================================================
+# TARGET AGE DATA
+# =========================================================
 
-with col_p2:
-    usia = safe_float(participant[COL_USIA])
-    st.markdown(
-        f"""
-        <div class="profile-card">
-            <div class="profile-label">Usia Saat Pensiun</div>
-            <div class="profile-value">{usia:.1f} <span style="font-size: 1.1rem; font-weight: 600;">tahun</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with col_p3:
-    masa_kerja = safe_float(participant[COL_MK])
-    st.markdown(
-        f"""
-        <div class="profile-card">
-            <div class="profile-label">Masa Kerja</div>
-            <div class="profile-value">{masa_kerja:.1f} <span style="font-size: 1.1rem; font-weight: 600;">tahun</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with col_p4:
-    phdp_val = participant[COL_PHDP]
-    st.markdown(
-        f"""
-        <div class="profile-card profile-card-accent">
-            <div class="profile-label">Gaji Dasar Pensiun (PHDP)</div>
-            <div class="profile-value profile-value-orange">{rupiah(phdp_val)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-if COL_IURAN:
-    iuran_val = participant[COL_IURAN]
-    st.markdown(
-        f"""
-        <div class="info-callout">
-            <b>Informasi Tambahan:</b> Akumulasi Iuran Peserta yang telah terkumpul selama masa kerja Bapak/Ibu adalah sebesar <b>{rupiah(iuran_val)}</b>.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.markdown(
-        """
-        <div class="info-callout">
-            <b>Penjelasan PHDP:</b> <i>Penghasilan Dasar Perhitungan Pensiun (PHDP)</i> adalah besaran gaji pokok terakhir yang dijadikan dasar patokan resmi untuk menghitung besaran manfaat pensiun Bapak/Ibu.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+last = sim_df.iloc[-1]
 
 
-# Calculate Core Benefit Metrics
-mpb = safe_float(participant[COL_MPB])
-mix_lump = safe_float(participant[COL_MIX_LUMP])
-mix_monthly = safe_float(participant[COL_MIX_MONTHLY])
-mps = safe_float(participant[COL_MPS])
+mpb_monthly_target = float(
+    last["MPB Bulanan"]
+)
 
-mpb_total = mpb * 12 * simulation_year
-mix_total = mix_lump + (mix_monthly * 12 * simulation_year)
+mix_monthly_target = float(
+    last["Mix Bulanan"]
+)
+
+mpb_total = float(
+    last["MPB Kumulatif"]
+)
+
+mix_total = float(
+    last["Mix Kumulatif"]
+)
+
 mps_total = mps
 
 
-# ── SECTION 2: BENEFIT COMPARISON CARDS ──
-st.markdown(
-    '<div class="section-block">'
-    '<div class="section-label">'
-    '<span class="section-number">2</span>'
-    '<span class="section-title">Perbandingan 3 Pilihan Cara Pembayaran Manfaat</span>'
-    '</div>'
-    '</div>',
-    unsafe_allow_html=True
-)
-st.markdown(
-    '<div class="section-desc">'
-    'Bapak/Ibu dapat memilih <b>salah satu</b> dari 3 skema di bawah ini. '
-    'Perhatikan perbedaan antara <b>uang yang diterima setiap bulan</b> dan <b>uang tunai yang cair langsung di awal</b>.'
-    '</div>',
-    unsafe_allow_html=True
+mpb_bhr_total = float(
+    sim_df["BHR MPB"].sum()
 )
 
-col_s1, col_s2, col_s3 = st.columns(3, gap="medium")
+mix_bhr_total = float(
+    sim_df["BHR Mix"].sum()
+)
 
-with col_s1:
-    st.markdown(
-        f"""
-        <div class="scheme-card" style="border-top: 6px solid #EA580C;">
-            <div>
-                <span class="scheme-badge badge-a">Pilihan A (Rutin Bulanan)</span>
-                <div class="scheme-title">Uang Pensiun Bulanan (100% MPB)</div>
-                <div class="scheme-explain">Artinya: seluruh manfaat pensiun dibayarkan setiap bulan secara rutin.</div>
-                <div class="metric-group">
-                    <div class="metric-title">Diterima Setiap Bulan:</div>
-                    <div class="metric-big text-orange">{rupiah(mpb)}</div>
-                    <div class="metric-note">Per bulan, rutin seumur hidup</div>
-                </div>
-                <div class="metric-group">
-                    <div class="metric-title">Uang Cair di Awal Pensiun:</div>
-                    <div style="font-size: 1.3rem; font-weight: 700; color: #57534E;">Rp0 (Tidak ada)</div>
-                </div>
-            </div>
-            <div class="scheme-total-box scheme-total-box-orange">
-                <div class="total-label text-dk-orange">Total Akumulasi {simulation_year} Tahun:</div>
-                <div class="total-value text-dk-orange">{rupiah(mpb_total)}</div>
-                <div class="total-hint">Cocok jika Anda ingin penghasilan rutin bulanan yang teratur.</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
+
+# =========================================================
+# PERIOD INFORMATION
+# =========================================================
+
+months_period = int(
+    round(
+        (target_age - retirement_age) * 12
     )
+)
 
-with col_s2:
+years_period = months_period / 12
+
+
+# =========================================================
+# SCHEME COMPARISON
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Perbandingan Struktur Manfaat</div>',
+    unsafe_allow_html=True
+)
+
+
+col1, col2, col3 = st.columns(
+    3,
+    gap="large"
+)
+
+
+# ---------------------------------------------------------
+# MPB
+# ---------------------------------------------------------
+
+with col1:
+
     st.markdown(
         f"""
-        <div class="scheme-card" style="border-top: 6px solid #C2410C;">
-            <div>
-                <span class="scheme-badge badge-b">Pilihan B (Kombinasi)</span>
-                <div class="scheme-title">Kombinasi (20% Awal + 80% Bulanan)</div>
-                <div class="scheme-explain">Artinya: 20% dicairkan tunai di awal, sisanya 80% dibayar rutin setiap bulan.</div>
-                <div class="metric-group">
-                    <div class="metric-title">1. Uang Tunai Cair di Awal (20%):</div>
-                    <div class="metric-big text-dk-orange">{rupiah(mix_lump)}</div>
-                    <div class="metric-note">Diterima sekaligus saat hari pensiun</div>
-                </div>
-                <div class="metric-group">
-                    <div class="metric-title">2. Diterima Setiap Bulan (80%):</div>
-                    <div style="font-size: 1.5rem; font-weight: 800; color: #C2410C;">{rupiah(mix_monthly)} / bln</div>
-                    <div class="metric-note">Rutin setiap bulan seumur hidup</div>
-                </div>
-            </div>
-            <div class="scheme-total-box scheme-total-box-orange">
-                <div class="total-label text-dk-orange">Total Akumulasi {simulation_year} Tahun:</div>
-                <div class="total-value text-dk-orange">{rupiah(mix_total)}</div>
-                <div class="total-hint">Cocok jika butuh modal di awal dan tetap ada gaji bulanan.</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        <div class="scheme-card scheme-blue">
 
-with col_s3:
-    st.markdown(
-        f"""
-        <div class="scheme-card" style="border-top: 6px solid #57534E;">
-            <div>
-                <span class="scheme-badge badge-c">Pilihan C (Sekaligus Penuh)</span>
-                <div class="scheme-title">Uang Pensiun Sekaligus (100% MPS)</div>
-                <div class="scheme-explain">Artinya: seluruh dana pensiun diambil tunai di awal, tanpa gaji bulanan setelahnya.</div>
-                <div class="metric-group">
-                    <div class="metric-title">Total Uang Tunai Cair di Awal (100%):</div>
-                    <div class="metric-big text-dark">{rupiah(mps)}</div>
-                    <div class="metric-note">Diambil sekaligus seluruhnya di awal</div>
-                </div>
-                <div class="metric-group">
-                    <div class="metric-title">Diterima Setiap Bulan Setelah Ini:</div>
-                    <div style="font-size: 1.3rem; font-weight: 800; color: #DC2626;">Rp0 (Tidak ada gaji bulanan)</div>
-                </div>
+            <div class="scheme-title">
+                MPB — 100% Bulanan
             </div>
-            <div class="scheme-total-box scheme-total-box-neutral">
-                <div class="total-label text-dark">Total Akumulasi {simulation_year} Tahun:</div>
-                <div class="total-value text-dark">{rupiah(mps_total)}</div>
-                <div class="total-hint">⚠️ Catatan: Tidak ada penerimaan uang di bulan-bulan berikutnya.</div>
+
+            <div class="scheme-label">
+                Manfaat Bulanan Awal
             </div>
+
+            <div class="scheme-value">
+                {rupiah(mpb)}
+            </div>
+
+            <div class="scheme-label">
+                Manfaat Bulanan pada Usia {target_age}
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mpb_monthly_target)}
+            </div>
+
+            <div class="scheme-label">
+                Total BHR
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mpb_bhr_total)}
+            </div>
+
+            <div class="scheme-label">
+                Total Penerimaan
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mpb_total)}
+            </div>
+
+            <div class="scheme-description">
+                Manfaat dibayarkan bulanan.
+                Nilai manfaat bulanan meningkat 3%
+                setiap bulan dan mendapatkan BHR
+                Rp5 juta setiap tahun.
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
 
-# ── SECTION 3: WINNER & RECOMMENDATION CARD ──
+# ---------------------------------------------------------
+# MIX
+# ---------------------------------------------------------
+
+with col2:
+
+    st.markdown(
+        f"""
+        <div class="scheme-card scheme-orange">
+
+            <div class="scheme-title">
+                Mix — 20% Sekaligus + 80% Bulanan
+            </div>
+
+            <div class="scheme-label">
+                Dana Sekaligus Awal
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mix_lump)}
+            </div>
+
+            <div class="scheme-label">
+                Manfaat Bulanan Awal
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mix_monthly)}
+            </div>
+
+            <div class="scheme-label">
+                Manfaat Bulanan pada Usia {target_age}
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mix_monthly_target)}
+            </div>
+
+            <div class="scheme-label">
+                Total BHR
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mix_bhr_total)}
+            </div>
+
+            <div class="scheme-label">
+                Total Penerimaan
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mix_total)}
+            </div>
+
+            <div class="scheme-description">
+                20% diterima sekaligus pada awal,
+                sedangkan 80% diterima bulanan.
+                Bagian bulanan meningkat 3% setiap bulan
+                dan mendapatkan BHR Rp5 juta setiap tahun.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ---------------------------------------------------------
+# MPS
+# ---------------------------------------------------------
+
+with col3:
+
+    st.markdown(
+        f"""
+        <div class="scheme-card scheme-purple">
+
+            <div class="scheme-title">
+                MPS — 100% Sekaligus
+            </div>
+
+            <div class="scheme-label">
+                Dana Diterima di Awal
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mps)}
+            </div>
+
+            <div class="scheme-label">
+                Manfaat Bulanan
+            </div>
+
+            <div class="scheme-value">
+                Rp0
+            </div>
+
+            <div class="scheme-label">
+                BHR
+            </div>
+
+            <div class="scheme-value">
+                Rp0
+            </div>
+
+            <div class="scheme-label">
+                Total Penerimaan
+            </div>
+
+            <div class="scheme-value">
+                {rupiah(mps_total)}
+            </div>
+
+            <div class="scheme-description">
+                Seluruh manfaat diterima sekaligus
+                pada awal pensiun. Tidak terdapat
+                manfaat bulanan maupun BHR setelah
+                pencairan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# KEY INSIGHTS
+# =========================================================
+
 st.markdown(
-    '<div class="section-block">'
-    '<div class="section-label">'
-    '<span class="section-number">3</span>'
-    '<span class="section-title">Rekomendasi: Skema dengan Hasil Nominal Tertinggi</span>'
-    '</div>'
-    '</div>',
+    '<div class="section-title">Insight Utama Berdasarkan Usia</div>',
     unsafe_allow_html=True
 )
+
+
+# Determine winner
 
 totals = {
-    "Pilihan A (Uang Pensiun Bulanan 100%)": mpb_total,
-    "Pilihan B (Kombinasi 20% Awal + 80% Bulanan)": mix_total,
-    "Pilihan C (Uang Pensiun Sekaligus 100%)": mps_total,
+    "MPB 100% Bulanan": mpb_total,
+    "Mix 20% + 80%": mix_total,
+    "MPS 100% Sekaligus": mps_total,
 }
 
-ranking = sorted(
+
+winner = max(
+    totals,
+    key=totals.get
+)
+
+winner_value = totals[winner]
+
+
+# Difference with second
+
+sorted_totals = sorted(
     totals.items(),
-    key=lambda item: item[1],
-    reverse=True,
+    key=lambda x: x[1],
+    reverse=True
 )
 
-winner = ranking[0][0]
-winner_value = ranking[0][1]
-second_value = ranking[1][1]
-winner_difference = winner_value - second_value
-
-if "Pilihan A" in winner:
-    explanation_text = (
-        f"Karena Bapak/Ibu melihat proyeksi jangka waktu <b>{simulation_year} tahun</b>, akumulasi penerimaan gaji bulanan rutin (Pilihan A) "
-        f"memberikan total uang terbanyak. Jumlah ini lebih besar <b>{rupiah(winner_difference)}</b> dibandingkan skema peringkat kedua."
-    )
-elif "Pilihan B" in winner:
-    explanation_text = (
-        f"Pada jangka waktu <b>{simulation_year} tahun</b>, skema Kombinasi (Pilihan B) memberikan total penerimaan nominal paling tinggi "
-        f"karena didorong oleh dana tunai 20% di awal ditambah penerimaan rutin 80% setiap bulan. Selisih keunggulannya sebesar <b>{rupiah(winner_difference)}</b>."
-    )
-else:
-    explanation_text = (
-        f"Pada jangka waktu <b>{simulation_year} tahun</b>, pencairan 100% di awal (Pilihan C) secara nominal memberikan jumlah awal terbesar. "
-        f"Namun harap diingat bahwa setelah pencairan ini, Bapak/Ibu tidak lagi memiliki penerimaan gaji bulanan di tahun-tahun berikutnya."
-    )
-
-st.markdown(
-    f"""
-    <div class="winner-card">
-        <div class="winner-tag">SKEMA DENGAN TOTAL NOMINAL TERTINGGI (JANGKA {simulation_year} TAHUN)</div>
-        <div class="winner-name">{winner}</div>
-        <div class="winner-body">
-            Estimasi Total Penerimaan: <b>{rupiah(winner_value)}</b><br><br>
-            {explanation_text}
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+second_value = (
+    sorted_totals[1][1]
+    if len(sorted_totals) > 1
+    else 0
 )
 
-st.markdown(
-    '<div style="margin-top: 8px; margin-bottom: 16px;">'
-    '<span style="font-size: 1.3rem; font-weight: 800; color: #1C1917;">Urutan Perolehan Total Uang (Peringkat 1–3):</span>'
-    '</div>',
-    unsafe_allow_html=True
+winner_difference = (
+    winner_value - second_value
 )
 
-rank_badges_cls = ["rank-badge-1", "rank-badge-2", "rank-badge-3"]
-rank_card_cls = ["rank-card rank-card-1", "rank-card", "rank-card"]
-rank_labels = ["Peringkat 1", "Peringkat 2", "Peringkat 3"]
 
-for idx, (scheme_name, scheme_val) in enumerate(ranking):
+i1, i2, i3, i4 = st.columns(4)
+
+
+with i1:
+
     st.markdown(
         f"""
-        <div class="{rank_card_cls[idx]}">
-            <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-                <span class="rank-badge {rank_badges_cls[idx]}">{rank_labels[idx]}</span>
-                <span class="rank-scheme-name">{scheme_name}</span>
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Skema Tertinggi
             </div>
-            <div class="rank-amount">
-                {rupiah(scheme_val)}
+
+            <div class="insight-main">
+                {winner}
             </div>
+
+            <div class="insight-text">
+                Pada usia tujuan {target_age} tahun,
+                skema ini memiliki akumulasi
+                penerimaan nominal tertinggi.
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
 
-# ── SECTION 4: BREAK-EVEN ANALYSIS ──
+with i2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Total Penerimaan
+            </div>
+
+            <div class="insight-main">
+                {rupiah(winner_value)}
+            </div>
+
+            <div class="insight-text">
+                Total nominal yang diproyeksikan
+                sampai usia {target_age} tahun.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with i3:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Selisih dengan Peringkat 2
+            </div>
+
+            <div class="insight-main">
+                {rupiah(winner_difference)}
+            </div>
+
+            <div class="insight-text">
+                Selisih akumulasi nominal dengan
+                skema peringkat kedua.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with i4:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Periode Analisis
+            </div>
+
+            <div class="insight-main">
+                {years_period:.1f} Tahun
+            </div>
+
+            <div class="insight-text">
+                Dari usia {retirement_age:.0f}
+                sampai usia {target_age}.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# BHR INSIGHT
+# =========================================================
+
 st.markdown(
-    '<div class="section-block">'
-    '<div class="section-label">'
-    '<span class="section-number">4</span>'
-    '<span class="section-title">Penjelasan Titik Impas (Waktu Berimbang)</span>'
-    '</div>'
-    '</div>',
+    '<div class="section-title">Insight Bantuan Hari Raya</div>',
     unsafe_allow_html=True
 )
 
+bhr_col1, bhr_col2, bhr_col3 = st.columns(3)
+
+
+with bhr_col1:
+
+    st.metric(
+        "Total BHR MPB",
+        rupiah(mpb_bhr_total)
+    )
+
+    st.caption(
+        "BHR Rp5 juta diberikan setiap 12 bulan."
+    )
+
+
+with bhr_col2:
+
+    st.metric(
+        "Total BHR Mix",
+        rupiah(mix_bhr_total)
+    )
+
+    st.caption(
+        "BHR diberikan kepada komponen bulanan Mix."
+    )
+
+
+with bhr_col3:
+
+    bhr_count = int(
+        sim_df["BHR MPB"].gt(0).sum()
+    )
+
+    st.metric(
+        "Jumlah BHR",
+        f"{bhr_count} kali"
+    )
+
+    st.caption(
+        f"Selama periode usia {retirement_age:.0f}–{target_age}."
+    )
+
+
+# =========================================================
+# MONTHLY GROWTH INSIGHT
+# =========================================================
+
 st.markdown(
-    """
-    <div class="info-callout" style="margin-top: 10px; margin-bottom: 28px;">
-        <b>Apa itu Titik Impas (Waktu Berimbang)?</b><br>
-        Titik impas adalah perkiraan jangka waktu (dalam hitungan tahun) yang dibutuhkan oleh skema pembayaran uang bulanan
-        agar total penerimaannya <b>menyusul atau menyamai</b> total penerimaan dari skema yang mengambil uang sekaligus di awal.
-        <br><br>Semakin <b>pendek</b> titik impas, semakin cepat skema bulanan menjadi lebih menguntungkan.
-    </div>
-    """,
+    '<div class="section-title">Perkembangan Manfaat Bulanan</div>',
     unsafe_allow_html=True
 )
 
-be_mpb_mix = break_even_mpb_mix(mpb, mix_monthly, mix_lump)
-be_mpb_mps = break_even_mpb_mps(mpb, mps)
-be_mix_mps = break_even_mix_mps(mix_lump, mix_monthly, mps)
 
-# SVG icon for trend/growth
-be_svg_icon = """
-<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-    <polyline points="17 6 23 6 23 12"></polyline>
-</svg>
-"""
+growth_col1, growth_col2 = st.columns(2)
 
-col_be1, col_be2, col_be3 = st.columns(3, gap="medium")
 
-# Card 1: MPB vs Mix
-with col_be1:
-    if be_mpb_mix is None:
-        val_str = "N/A"
-        exp_str = "Manfaat bulanan Pilihan A tidak lebih besar dari Pilihan B sehingga tidak ada titik impas."
+with growth_col1:
+
+    mpb_growth_pct = (
+        (
+            mpb_monthly_target / mpb - 1
+        ) * 100
+        if mpb > 0
+        else 0
+    )
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPB
+            </div>
+
+            <div class="insight-main">
+                {rupiah(mpb_monthly_target)}
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age} tahun,
+                manfaat bulanan MPB diproyeksikan
+                menjadi {rupiah(mpb_monthly_target)}.
+                Ini setara dengan pertumbuhan kumulatif
+                sekitar {mpb_growth_pct:,.1f}% dari
+                nilai awal.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with growth_col2:
+
+    mix_growth_pct = (
+        (
+            mix_monthly_target / mix_monthly - 1
+        ) * 100
+        if mix_monthly > 0
+        else 0
+    )
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Mix — Komponen Bulanan
+            </div>
+
+            <div class="insight-main">
+                {rupiah(mix_monthly_target)}
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age} tahun,
+                manfaat bulanan Mix diproyeksikan
+                menjadi {rupiah(mix_monthly_target)}.
+                Ini setara dengan pertumbuhan kumulatif
+                sekitar {mix_growth_pct:,.1f}% dari
+                nilai awal.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# BREAK EVEN ANALYSIS
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Analisis Titik Impas Berdasarkan Usia</div>',
+    unsafe_allow_html=True
+)
+
+
+be_mpb_mix = find_break_even_age(
+    sim_df,
+    "MPB Kumulatif",
+    "Mix Kumulatif",
+    retirement_age
+)
+
+be_mpb_mps = find_break_even_age(
+    sim_df,
+    "MPB Kumulatif",
+    "MPS Kumulatif",
+    retirement_age
+)
+
+be_mix_mps = find_break_even_age(
+    sim_df,
+    "Mix Kumulatif",
+    "MPS Kumulatif",
+    retirement_age
+)
+
+
+be1, be2, be3 = st.columns(3)
+
+
+with be1:
+
+    if be_mpb_mix is not None:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                <b>MPB vs Mix</b>
+                MPB mulai menyamai/melewati Mix
+                sekitar usia
+                <b>{be_mpb_mix:.1f} tahun</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     else:
-        val_str = f"{be_mpb_mix:.1f} Tahun"
-        if simulation_year < be_mpb_mix:
-            exp_str = f"Dalam {simulation_year} tahun pertama, Pilihan B masih unggul karena ada uang cash 20% di awal. Namun setelah <b>{be_mpb_mix:.1f} tahun</b>, Pilihan A akan menyusul dan menjadi lebih besar."
-        else:
-            exp_str = f"Setelah melewati <b>{be_mpb_mix:.1f} tahun</b>, total penerimaan bulanan rutin dari Pilihan A resmi melampaui Pilihan B."
 
-    st.markdown(f"""
-    <div class="be-card">
-        <div>
-            <div class="be-num">1</div>
-            <div class="be-question">Kapan Pilihan A (Full Bulanan) menyusul Pilihan B (Kombinasi)?</div>
-            <div class="be-divider"></div>
-        </div>
-        <div style="margin: 10px 0;">
-            <div class="be-value">{val_str}</div>
-            <div class="be-icon">{be_svg_icon}</div>
-        </div>
-        <div class="be-explain">{exp_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="warning-box">
+                <b>MPB vs Mix</b>
+                MPB belum menyamai Mix
+                dalam rentang usia simulasi.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-# Card 2: MPB vs MPS
-with col_be2:
-    if be_mpb_mps is None:
-        val_str = "N/A"
-        exp_str = "Titik impas tidak dapat dihitung."
+
+with be2:
+
+    if be_mpb_mps is not None:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                <b>MPB vs MPS</b>
+                MPB mulai menyamai/melewati MPS
+                sekitar usia
+                <b>{be_mpb_mps:.1f} tahun</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     else:
-        val_str = f"{be_mpb_mps:.1f} Tahun"
-        if simulation_year < be_mpb_mps:
-            exp_str = f"Pada {simulation_year} tahun pertama, uang cash cair 100% di awal (Pilihan C) masih terlihat lebih banyak. Namun di tahun ke-<b>{be_mpb_mps:.1f}</b>, gaji bulanan Pilihan A resmi menyamai uang Pilihan C."
-        else:
-            exp_str = f"Setelah melewati <b>{be_mpb_mps:.1f} tahun</b>, akumulasi gaji bulanan Pilihan A sudah melampaui seluruh uang cair di awal Pilihan C."
 
-    st.markdown(f"""
-    <div class="be-card">
-        <div>
-            <div class="be-num">2</div>
-            <div class="be-question">Kapan Pilihan A (Full Bulanan) menyusul Pilihan C (Full Sekaligus)?</div>
-            <div class="be-divider"></div>
-        </div>
-        <div style="margin: 10px 0;">
-            <div class="be-value">{val_str}</div>
-            <div class="be-icon">{be_svg_icon}</div>
-        </div>
-        <div class="be-explain">{exp_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="warning-box">
+                <b>MPB vs MPS</b>
+                MPB belum menyamai MPS
+                dalam rentang usia simulasi.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-# Card 3: Mix vs MPS
-with col_be3:
-    if be_mix_mps is None:
-        val_str = "N/A"
-        exp_str = "Titik impas tidak dapat dihitung."
+
+with be3:
+
+    if be_mix_mps is not None:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                <b>Mix vs MPS</b>
+                Mix mulai menyamai/melewati MPS
+                sekitar usia
+                <b>{be_mix_mps:.1f} tahun</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     else:
-        val_str = f"{be_mix_mps:.1f} Tahun"
-        if simulation_year < be_mix_mps:
-            exp_str = f"Pada {simulation_year} tahun pertama, Pilihan C masih terlihat lebih tinggi. Namun di tahun ke-<b>{be_mix_mps:.1f}</b>, total uang dari Pilihan B resmi menyamai Pilihan C."
-        else:
-            exp_str = f"Setelah melewati <b>{be_mix_mps:.1f} tahun</b>, akumulasi uang dari Pilihan B sudah melampaui Pilihan C."
 
-    st.markdown(f"""
-    <div class="be-card">
-        <div>
-            <div class="be-num">3</div>
-            <div class="be-question">Kapan Pilihan B (Kombinasi) menyusul Pilihan C (Full Sekaligus)?</div>
-            <div class="be-divider"></div>
-        </div>
-        <div style="margin: 10px 0;">
-            <div class="be-value">{val_str}</div>
-            <div class="be-icon">{be_svg_icon}</div>
-        </div>
-        <div class="be-explain">{exp_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="warning-box">
+                <b>Mix vs MPS</b>
+                Mix belum menyamai MPS
+                dalam rentang usia simulasi.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
-# ── SECTION 5: SIMULATION GRAPH ──
+# =========================================================
+# COMPARISON TABLE
+# =========================================================
+
 st.markdown(
-    '<div class="section-block">'
-    '<div class="section-label">'
-    '<span class="section-number">5</span>'
-    '<span class="section-title">Grafik Proyeksi Perkembangan Uang Pensiun</span>'
-    '</div>'
-    '</div>',
-    unsafe_allow_html=True
-)
-st.markdown(
-    f'<div class="section-desc">Grafik di bawah ini menggambarkan pertumbuhan total uang yang diterima dari tahun ke-0 hingga <b>tahun ke-{simulation_year}</b>. '
-    f'Arahkan kursor ke garis untuk melihat angka pasti di setiap tahun.</div>',
+    '<div class="section-title">Perbandingan Total pada Usia Tujuan</div>',
     unsafe_allow_html=True
 )
 
-sim_df = simulation(
-    mpb,
-    mix_lump,
-    mix_monthly,
-    mps,
-    max_year=simulation_year,
+
+comparison_df = pd.DataFrame(
+    {
+        "Skema": [
+            "MPB 100% Bulanan",
+            "Mix 20% + 80%",
+            "MPS 100% Sekaligus",
+        ],
+        "Total Penerimaan": [
+            rupiah(mpb_total),
+            rupiah(mix_total),
+            rupiah(mps_total),
+        ],
+    }
 )
+
+
+st.dataframe(
+    comparison_df,
+    hide_index=True,
+    width="stretch",
+)
+
+
+# =========================================================
+# CHART 1 — CUMULATIVE BENEFIT
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Proyeksi Akumulasi Manfaat Berdasarkan Usia</div>',
+    unsafe_allow_html=True
+)
+
 
 fig = go.Figure()
 
-# Trace A: Primary Orange — bold, high visibility
+
 fig.add_trace(
     go.Scatter(
-        x=sim_df["Tahun"],
-        y=sim_df["Pilihan A (MPB 100% Bulanan)"],
-        mode="lines+markers",
-        name="Pilihan A: Full Bulanan (100%)",
-        line=dict(color="#EA580C", width=4.5),
-        marker=dict(size=10, color="#EA580C", line=dict(width=2, color="#FFFFFF")),
-        hovertemplate="<b>Pilihan A</b><br>Tahun ke-%{x}<br>Total Uang: Rp%{y:,.0f}<extra></extra>",
+        x=sim_df["Usia"],
+        y=sim_df["MPB Kumulatif"],
+        mode="lines",
+        name="MPB 100% Bulanan",
+        line=dict(
+            color="#9a3412",
+            width=3,
+            dash="solid",
+        ),
+        hovertemplate="MPB: Rp%{y:,.0f}<extra></extra>",
     )
 )
 
-# Trace B: Light Orange — distinct from A
+
 fig.add_trace(
     go.Scatter(
-        x=sim_df["Tahun"],
-        y=sim_df["Pilihan B (Mix 20% + 80%)"],
-        mode="lines+markers",
-        name="Pilihan B: Kombinasi (20%+80%)",
-        line=dict(color="#FB923C", width=4.5),
-        marker=dict(size=10, color="#FB923C", line=dict(width=2, color="#FFFFFF")),
-        hovertemplate="<b>Pilihan B</b><br>Tahun ke-%{x}<br>Total Uang: Rp%{y:,.0f}<extra></extra>",
+        x=sim_df["Usia"],
+        y=sim_df["Mix Kumulatif"],
+        mode="lines",
+        name="Mix 20% + 80%",
+        line=dict(
+            color="#f97316",
+            width=3,
+            dash="dash",
+        ),
+        hovertemplate="Mix: Rp%{y:,.0f}<extra></extra>",
     )
 )
 
-# Trace C: Neutral Dark — high contrast against orange
+
 fig.add_trace(
     go.Scatter(
-        x=sim_df["Tahun"],
-        y=sim_df["Pilihan C (MPS 100% Sekaligus)"],
-        mode="lines+markers",
-        name="Pilihan C: Full Sekaligus (100%)",
-        line=dict(color="#44403C", width=4.5, dash="dot"),
-        marker=dict(size=10, color="#44403C", line=dict(width=2, color="#FFFFFF")),
-        hovertemplate="<b>Pilihan C</b><br>Tahun ke-%{x}<br>Total Uang: Rp%{y:,.0f}<extra></extra>",
+        x=sim_df["Usia"],
+        y=sim_df["MPS Kumulatif"],
+        mode="lines",
+        name="MPS 100% Sekaligus",
+        line=dict(
+            color="#7c2d12",
+            width=2.5,
+            dash="dot",
+        ),
+        hovertemplate="MPS: Rp%{y:,.0f}<extra></extra>",
     )
 )
+
 
 fig.update_layout(
-    xaxis_title="Jangka Waktu Penerimaan Manfaat (Tahun)",
-    yaxis_title="Total Akumulasi Uang (Rupiah)",
-    hovermode="x unified",
     template="plotly_white",
-    font=dict(
-        family="Plus Jakarta Sans, sans-serif",
-        size=17,
-        color="#1C1917",
-    ),
-    title=dict(
-        text=f"Proyeksi Akumulasi Penerimaan Manfaat ({simulation_year} Tahun)",
-        font=dict(size=22, color="#1C1917", family="Plus Jakarta Sans, sans-serif"),
-        x=0.5,
-        y=0.98,              # <-- ditambahkan: dorong judul ke posisi paling atas margin
-        xanchor="center",
-        yanchor="top",       # <-- ditambahkan: biar y=0.98 dihitung dari atas judul, bukan tengah
-    ),
+    xaxis_title="Usia",
+    yaxis_title="Akumulasi Manfaat (Rp)",
+    hovermode="x unified",
     legend=dict(
         orientation="h",
         yanchor="bottom",
-        y=1.15,              # <-- dinaikkan dari 1.06 ke 1.15, kasih jarak dari judul
-        xanchor="center",
-        x=0.5,
-        font=dict(size=16, color="#1C1917"),
-        bgcolor="rgba(255, 255, 255, 0.97)",
-        bordercolor="#D6D3D1",
-        borderwidth=1.5,
-        itemsizing="constant",
+        y=1.02,
+        xanchor="right",
+        x=1,
+        font=dict(size=14),
     ),
-    margin=dict(l=30, r=30, t=140, b=40),  # <-- dinaikkan dari 100 ke 140 biar ruang atas cukup untuk judul+legend
-    plot_bgcolor="#FFFBF5",
-    paper_bgcolor="#FAFAF9",
-    hoverlabel=dict(
-        bgcolor="#FFFFFF",
-        bordercolor="#D6D3D1",
-        font_size=16,
-        font_family="Plus Jakarta Sans, sans-serif",
-        font_color="#1C1917",
+    margin=dict(
+        l=20,
+        r=20,
+        t=48,
+        b=24,
     ),
+    font=dict(
+        family="Plus Jakarta Sans, sans-serif",
+        size=16,
+        color="#1c1917"
+    ),
+    height=480,
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
 )
+
 
 fig.update_xaxes(
     showgrid=True,
-    gridwidth=1.5,
-    gridcolor="#E7E5E4",
-    tickfont=dict(size=16, color="#1C1917"),
-    title_font=dict(size=17, color="#1C1917"),
-    dtick=1 if simulation_year <= 10 else (2 if simulation_year <= 20 else 5),
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
 )
+
 
 fig.update_yaxes(
     showgrid=True,
-    gridwidth=1.5,
-    gridcolor="#E7E5E4",
-    tickfont=dict(size=16, color="#1C1917"),
-    title_font=dict(size=17, color="#1C1917"),
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
 )
+
 
 st.plotly_chart(
     fig,
-    width="stretch"
+    width='stretch',
+)
+
+
+# =========================================================
+# CHART 2 — MONTHLY BENEFIT GROWTH
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Perkembangan Manfaat Bulanan</div>',
+    unsafe_allow_html=True
+)
+
+
+fig_monthly = go.Figure()
+
+
+fig_monthly.add_trace(
+    go.Scatter(
+        x=sim_df["Usia"],
+        y=sim_df["MPB Bulanan"],
+        mode="lines",
+        name="MPB",
+        line=dict(
+            color="#9a3412",
+            width=3,
+            dash="solid",
+        ),
+        hovertemplate="MPB: Rp%{y:,.0f}<extra></extra>",
+    )
+)
+
+
+fig_monthly.add_trace(
+    go.Scatter(
+        x=sim_df["Usia"],
+        y=sim_df["Mix Bulanan"],
+        mode="lines",
+        name="Mix",
+        line=dict(
+            color="#f97316",
+            width=3,
+            dash="dash",
+        ),
+        hovertemplate="Mix: Rp%{y:,.0f}<extra></extra>",
+    )
+)
+
+
+fig_monthly.update_layout(
+    template="plotly_white",
+    xaxis_title="Usia",
+    yaxis_title="Manfaat Bulanan (Rp)",
+    hovermode="x unified",
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1,
+        font=dict(size=14),
+    ),
+    margin=dict(
+        l=20,
+        r=20,
+        t=48,
+        b=24,
+    ),
+    font=dict(
+        family="Plus Jakarta Sans, sans-serif",
+        size=16,
+        color="#1c1917"
+    ),
+    height=440,
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+)
+
+fig_monthly.update_xaxes(
+    showgrid=True,
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
+)
+
+fig_monthly.update_yaxes(
+    showgrid=True,
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
+)
+
+
+st.plotly_chart(
+    fig_monthly,
+    width='stretch',
+)
+
+
+# =========================================================
+# NEED ANALYSIS
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Analisis Kebutuhan Pensiun</div>',
+    unsafe_allow_html=True
 )
 
 st.markdown(
     """
-    <div class="chart-guide">
-        <b>Panduan Membaca Grafik:</b><br>
-        • <b>Garis Oranye Tua (Pilihan A)</b> dan <b>Garis Oranye Muda (Pilihan B)</b> terus bergerak naik ke atas karena ada penerimaan uang bulanan rutin setiap tahun.<br>
-        • <b>Garis Abu-abu Mendatar dengan Titik-titik (Pilihan C)</b> posisinya tetap lurus dari awal sampai akhir karena uang dicairkan 100% sekaligus di awal dan tidak ada lagi gaji bulanan tambahan.<br>
-        • <b>Titik perpotongan garis</b> menunjukkan kapan skema bulanan mulai menyamai/melampaui skema sekaligus — itulah titik impas.
+    <div class="section-note">
+        Masukkan estimasi kebutuhan rutin dan kebutuhan dana awal
+        untuk melihat bagaimana karakteristik masing-masing skema
+        terhadap kondisi peserta.
     </div>
     """,
     unsafe_allow_html=True
 )
 
 
-# ── SECTION 6: DISCLAIMER & FOOTER ──
-st.divider()
+need_col1, need_col2 = st.columns(2)
+
+
+# ---------------------------------------------------------
+# KEBUTUHAN BULANAN
+# ---------------------------------------------------------
+
+with need_col1:
+
+    monthly_need = st.number_input(
+        "Estimasi kebutuhan hidup per bulan",
+        min_value=0,
+        value=5_000_000,
+        step=500_000,
+        format="%d",
+        help="Estimasi pengeluaran rutin peserta setiap bulan setelah pensiun."
+    )
+
+
+# ---------------------------------------------------------
+# KEBUTUHAN DANA AWAL
+# ---------------------------------------------------------
+
+with need_col2:
+
+    initial_need = st.number_input(
+        "Estimasi kebutuhan dana awal",
+        min_value=0,
+        value=50_000_000,
+        step=5_000_000,
+        format="%d",
+        help="Estimasi dana yang dibutuhkan peserta pada awal masa pensiun."
+    )
+
+
+# =========================================================
+# MONTHLY COVERAGE
+# =========================================================
+
+mpb_coverage = (
+    mpb_monthly_target /
+    monthly_need *
+    100
+    if monthly_need > 0
+    else 0
+)
+
+mix_coverage = (
+    mix_monthly_target /
+    monthly_need *
+    100
+    if monthly_need > 0
+    else 0
+)
+
+
+# =========================================================
+# INITIAL FUND COVERAGE
+# =========================================================
+
+mix_initial_coverage = (
+    mix_lump /
+    initial_need *
+    100
+    if initial_need > 0
+    else 0
+)
+
+mps_initial_coverage = (
+    mps /
+    initial_need *
+    100
+    if initial_need > 0
+    else 0
+)
+
+
+# =========================================================
+# MONTHLY COVERAGE CARDS
+# =========================================================
+
+st.markdown(
+    "### Kemampuan Menutup Kebutuhan Bulanan"
+)
+
+coverage1, coverage2 = st.columns(2)
+
+
+with coverage1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Kemampuan MPB
+            </div>
+
+            <div class="insight-main">
+                {mpb_coverage:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age} tahun,
+                manfaat bulanan MPB diproyeksikan
+                sebesar <b>{rupiah(mpb_monthly_target)}</b>
+                dan mampu menutup sekitar
+                <b>{mpb_coverage:.1f}%</b>
+                dari kebutuhan bulanan
+                <b>{rupiah(monthly_need)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with coverage2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Kemampuan Mix
+            </div>
+
+            <div class="insight-main">
+                {mix_coverage:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age} tahun,
+                manfaat bulanan Mix diproyeksikan
+                sebesar <b>{rupiah(mix_monthly_target)}</b>
+                dan mampu menutup sekitar
+                <b>{mix_coverage:.1f}%</b>
+                dari kebutuhan bulanan
+                <b>{rupiah(monthly_need)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# INITIAL FUND COVERAGE
+# =========================================================
+
+st.markdown(
+    "<br>",
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    "### Kemampuan Memenuhi Kebutuhan Dana Awal"
+)
+
+
+initial1, initial2 = st.columns(2)
+
+
+with initial1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Mix — Dana Sekaligus
+            </div>
+
+            <div class="insight-main">
+                {mix_initial_coverage:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Dana awal Mix sebesar
+                <b>{rupiah(mix_lump)}</b>
+                mampu memenuhi sekitar
+                <b>{mix_initial_coverage:.1f}%</b>
+                dari kebutuhan dana awal
+                sebesar <b>{rupiah(initial_need)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with initial2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPS — Dana Sekaligus
+            </div>
+
+            <div class="insight-main">
+                {mps_initial_coverage:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Dana awal MPS sebesar
+                <b>{rupiah(mps)}</b>
+                mampu memenuhi sekitar
+                <b>{mps_initial_coverage:.1f}%</b>
+                dari kebutuhan dana awal
+                sebesar <b>{rupiah(initial_need)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# =========================================================
+# PROFIL KEBUTUHAN PESERTA
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Profil Kebutuhan Peserta</div>',
+    unsafe_allow_html=True
+)
 
 st.markdown(
     """
-    <div class="disclaimer-box">
-        <b>⚠️ Catatan Penting:</b> Perhitungan dalam simulasi ini bersifat estimasi nominal berdasarkan data kepesertaan Anda.
-        Hasil perhitungan belum memperhitungkan tingkat inflasi, hasil investasi dari dana cair di awal, atau perubahan kebijakan aturan di masa mendatang.
-        Hasil simulasi ini berfungsi sebagai alat bantu pembanding dan bukan merupakan saran keuangan mengikat.
+    <div class="info-box">
+        Bagian ini membantu menggambarkan karakteristik kebutuhan peserta
+        berdasarkan kebutuhan bulanan dan kebutuhan dana awal yang dimasukkan.
+        Hasilnya bersifat informatif dan bukan rekomendasi keputusan finansial.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ---------------------------------------------------------
+# HITUNG INDIKATOR
+# ---------------------------------------------------------
+
+# Coverage kebutuhan bulanan
+if monthly_need > 0:
+    mpb_monthly_coverage = (mpb_monthly_target / monthly_need) * 100
+    mix_monthly_coverage = (mix_monthly_target / monthly_need) * 100
+else:
+    mpb_monthly_coverage = 0
+    mix_monthly_coverage = 0
+
+# Coverage kebutuhan dana awal
+if initial_need > 0:
+    mix_initial_coverage = (mix_lump / initial_need) * 100
+    mps_initial_coverage = (mps / initial_need) * 100
+else:
+    mix_initial_coverage = 0
+    mps_initial_coverage = 0
+
+# ---------------------------------------------------------
+# TENTUKAN KARAKTERISTIK
+# ---------------------------------------------------------
+
+# Kebutuhan rutin lebih dominan
+monthly_priority = (
+    monthly_need > 0
+    and monthly_need >= initial_need / 6
+)
+
+# Kebutuhan dana awal lebih dominan
+initial_priority = (
+    initial_need > monthly_need * 6
+)
+
+# Keduanya cukup besar
+balanced_need = (
+    monthly_priority
+    and initial_priority
+)
+
+if balanced_need:
+    participant_profile = "Kebutuhan Seimbang"
+
+    profile_description = (
+        "Peserta memiliki kebutuhan dana awal sekaligus "
+        "kebutuhan pendapatan rutin setelah pensiun."
+    )
+
+elif initial_priority:
+    participant_profile = "Berorientasi Dana Awal"
+
+    profile_description = (
+        "Kebutuhan dana awal relatif besar dibandingkan "
+        "kebutuhan rutin bulanan."
+    )
+
+elif monthly_priority:
+    participant_profile = "Berorientasi Pendapatan Rutin"
+
+    profile_description = (
+        "Kebutuhan utama peserta lebih berfokus pada "
+        "kemampuan memenuhi pengeluaran rutin setelah pensiun."
+    )
+
+else:
+    participant_profile = "Kebutuhan Relatif Fleksibel"
+
+    profile_description = (
+        "Tidak terdapat satu kebutuhan yang sangat dominan "
+        "berdasarkan parameter yang dimasukkan."
+    )
+
+# ---------------------------------------------------------
+# TAMPILKAN PROFIL
+# ---------------------------------------------------------
+
+profile1, profile2, profile3 = st.columns(3)
+
+with profile1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Profil Peserta
+            </div>
+
+            <div class="insight-main">
+                {participant_profile}
+            </div>
+
+            <div class="insight-text">
+                {profile_description}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with profile2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Coverage Pendapatan Bulanan
+            </div>
+
+            <div class="insight-text">
+
+                <b>MPB</b><br>
+                {mpb_monthly_coverage:.1f}% kebutuhan
+
+                <b>Mix</b><br>
+                {mix_monthly_coverage:.1f}% kebutuhan
+
+                <b>MPS</b><br>
+                Tidak memiliki manfaat bulanan
+
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with profile3:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Coverage Dana Awal
+            </div>
+
+            <div class="insight-text">
+
+                <b>Mix</b><br>
+                {mix_initial_coverage:.1f}% kebutuhan dana awal
+
+                <b>MPS</b><br>
+                {mps_initial_coverage:.1f}% kebutuhan dana awal
+
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# KARAKTERISTIK SKEMA TERHADAP PROFIL
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Karakteristik Skema terhadap Kebutuhan Peserta</div>',
+    unsafe_allow_html=True
+)
+
+
+# ---------------------------------------------------------
+# PENJELASAN MPB
+# ---------------------------------------------------------
+
+if mpb_monthly_coverage >= 100:
+
+    mpb_assessment = (
+        f"Manfaat bulanan MPB sebesar {rupiah(mpb_monthly_target)} "
+        f"secara nominal sudah dapat menutup kebutuhan bulanan "
+        f"{rupiah(monthly_need)}."
+    )
+
+elif mpb_monthly_coverage > 0:
+
+    mpb_assessment = (
+        f"Manfaat bulanan MPB sebesar {rupiah(mpb_monthly_target)} "
+        f"menutup sekitar {mpb_monthly_coverage:.1f}% kebutuhan bulanan. "
+        f"Masih terdapat kebutuhan yang belum tertutup sekitar "
+        f"{rupiah(max(monthly_need - mpb_monthly_target, 0))}."
+    )
+
+else:
+
+    mpb_assessment = (
+        "Tidak terdapat manfaat bulanan MPB yang dapat digunakan "
+        "untuk menilai coverage."
+    )
+
+
+# ---------------------------------------------------------
+# PENJELASAN MIX
+# ---------------------------------------------------------
+
+if mix_monthly_coverage >= 100:
+
+    mix_assessment = (
+        f"Manfaat bulanan Mix sebesar {rupiah(mix_monthly_target)} "
+        f"secara nominal sudah dapat menutup kebutuhan bulanan. "
+        f"Selain itu tersedia dana awal sebesar {rupiah(mix_lump)}."
+    )
+
+elif mix_monthly_coverage > 0:
+
+    mix_assessment = (
+        f"Manfaat bulanan Mix sebesar {rupiah(mix_monthly_target)} "
+        f"menutup sekitar {mix_monthly_coverage:.1f}% kebutuhan bulanan, "
+        f"dengan tambahan dana awal sebesar {rupiah(mix_lump)}."
+    )
+
+else:
+
+    mix_assessment = (
+        f"Mix menyediakan dana awal sebesar {rupiah(mix_lump)}, "
+        f"namun manfaat bulanannya tidak mencukupi parameter kebutuhan."
+    )
+
+
+# ---------------------------------------------------------
+# PENJELASAN MPS
+# ---------------------------------------------------------
+
+if mps_initial_coverage >= 100:
+
+    mps_assessment = (
+        f"MPS menyediakan dana awal sebesar {rupiah(mps)}, "
+        f"yang secara nominal sudah memenuhi kebutuhan dana awal "
+        f"{rupiah(initial_need)}."
+    )
+
+elif mps > 0:
+
+    mps_assessment = (
+        f"MPS menyediakan dana awal sebesar {rupiah(mps)}, "
+        f"setara dengan {mps_initial_coverage:.1f}% dari kebutuhan "
+        f"dana awal {rupiah(initial_need)}."
+    )
+
+else:
+
+    mps_assessment = (
+        "Tidak terdapat nilai MPS yang dapat digunakan "
+        "untuk menilai kebutuhan dana awal."
+    )
+
+
+# ---------------------------------------------------------
+# TIGA CARD
+# ---------------------------------------------------------
+
+scheme1, scheme2, scheme3 = st.columns(3, gap="large")
+
+with scheme1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card" style="border-top:4px solid #c2410c;">
+
+            <div class="insight-title">
+                MPB — Pendapatan Rutin
+            </div>
+
+            <div class="insight-text">
+                {mpb_assessment}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with scheme2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card" style="border-top:4px solid #f97316;">
+
+            <div class="insight-title">
+                Mix — Kombinasi
+            </div>
+
+            <div class="insight-text">
+                {mix_assessment}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with scheme3:
+
+    st.markdown(
+        f"""
+        <div class="insight-card" style="border-top:4px solid #7c2d12;">
+
+            <div class="insight-title">
+                MPS — Likuiditas Awal
+            </div>
+
+            <div class="insight-text">
+                {mps_assessment}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# PANDUAN MEMBACA HASIL
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    """
+    <div class="insight-card">
+
+        <div class="insight-title">
+            Panduan Membaca Hasil
+        </div>
+
+        <div class="insight-text">
+
+            <p>
+                <b>MPB</b> lebih berorientasi pada pendapatan rutin,
+                sehingga indikator utama yang perlu diperhatikan adalah
+                manfaat bulanan dan kemampuannya memenuhi kebutuhan hidup.
+            </p>
+
+            <p>
+                <b>Mix</b> berada di tengah karena memberikan dua bentuk
+                penerimaan: dana sekaligus di awal dan manfaat bulanan.
+            </p>
+
+            <p>
+                <b>MPS</b> lebih berorientasi pada likuiditas awal karena
+                seluruh manfaat diterima sekaligus dan tidak ada manfaat
+                bulanan berikutnya.
+            </p>
+
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 1 — USIA SAAT KEBUTUHAN BULANAN TERCAPAI
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Usia Saat Manfaat Bulanan Mencapai Kebutuhan</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="section-note">
+        Insight ini mencari usia ketika manfaat bulanan pertama kali
+        sama dengan atau melebihi estimasi kebutuhan hidup per bulan.
+        Perhitungan hanya menggunakan manfaat bulanan, sehingga tidak
+        memasukkan BHR atau dana sekaligus.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+def find_monthly_coverage_age(
+    sim_df,
+    benefit_column,
+    monthly_need,
+):
+    if monthly_need <= 0:
+        return None
+
+    matching = sim_df[
+        sim_df[benefit_column] >= monthly_need
+    ]
+
+    if matching.empty:
+        return None
+
+    return float(matching.iloc[0]["Usia"])
+
+
+mpb_need_age = find_monthly_coverage_age(
+    sim_df,
+    "MPB Bulanan",
+    monthly_need,
+)
+
+mix_need_age = find_monthly_coverage_age(
+    sim_df,
+    "Mix Bulanan",
+    monthly_need,
+)
+
+
+age_col1, age_col2 = st.columns(2, gap="large")
+
+
+with age_col1:
+
+    if mpb_need_age is None:
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+                <b>MPB</b>
+                Sampai usia tujuan {target_age} tahun,
+                manfaat bulanan MPB belum mencapai kebutuhan
+                sebesar <b>{rupiah(monthly_need)}</b> per bulan.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                <b>MPB</b>
+                Manfaat bulanan MPB pertama kali mencapai
+                kebutuhan <b>{rupiah(monthly_need)}</b>
+                sekitar usia <b>{mpb_need_age:.1f} tahun</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+with age_col2:
+
+    if mix_need_age is None:
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+                <b>Mix</b><br><br>
+                Sampai usia tujuan {target_age} tahun,
+                manfaat bulanan Mix belum mencapai kebutuhan
+                sebesar <b>{rupiah(monthly_need)}</b> per bulan.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                <b>Mix</b>
+                Manfaat bulanan Mix pertama kali mencapai
+                kebutuhan <b>{rupiah(monthly_need)}</b>
+                sekitar usia <b>{mix_need_age:.1f} tahun</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 2 — DANA AWAL SETARA BERAPA BULAN KEBUTUHAN
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Dana Awal Setara Berapa Bulan Kebutuhan?</div>',
+    unsafe_allow_html=True
+)
+
+mix_initial_months = (
+    mix_lump / monthly_need
+    if monthly_need > 0 else 0
+)
+
+mps_initial_months = (
+    mps / monthly_need
+    if monthly_need > 0 else 0
+)
+
+
+months_col1, months_col2 = st.columns(2, gap="large")
+
+
+with months_col1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Mix — Dana Sekaligus
+            </div>
+
+            <div class="insight-main">
+                {mix_initial_months:.1f} Bulan
+            </div>
+
+            <div class="insight-text">
+                Dana sekaligus sebesar <b>{rupiah(mix_lump)}</b>
+                secara nominal setara dengan sekitar
+                <b>{mix_initial_months:.1f} bulan</b>
+                kebutuhan hidup dengan asumsi kebutuhan
+                {rupiah(monthly_need)} per bulan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with months_col2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPS — Dana Sekaligus
+            </div>
+
+            <div class="insight-main">
+                {mps_initial_months:.1f} Bulan
+            </div>
+
+            <div class="insight-text">
+                Dana sekaligus sebesar <b>{rupiah(mps)}</b>
+                secara nominal setara dengan sekitar
+                <b>{mps_initial_months:.1f} bulan</b>
+                kebutuhan hidup dengan asumsi kebutuhan
+                {rupiah(monthly_need)} per bulan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 3 — PENDAPATAN RUTIN VS DANA AWAL
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Profil Penerimaan: Pendapatan Rutin vs Dana Awal</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="section-note">
+        Visualisasi ini menunjukkan trade-off antar-skema:
+        semakin tinggi posisi pada sumbu pendapatan rutin,
+        semakin besar manfaat bulanan; semakin ke kanan,
+        semakin besar dana yang tersedia di awal.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+profile_df = pd.DataFrame(
+    {
+        "Skema": [
+            "MPB 100% Bulanan",
+            "Mix 20% + 80%",
+            "MPS 100% Sekaligus",
+        ],
+        "Pendapatan Rutin": [
+            mpb_monthly_target,
+            mix_monthly_target,
+            0,
+        ],
+        "Dana Awal": [
+            0,
+            mix_lump,
+            mps,
+        ],
+    }
+)
+
+fig_tradeoff = go.Figure()
+
+fig_tradeoff.add_trace(
+    go.Scatter(
+        x=profile_df["Dana Awal"],
+        y=profile_df["Pendapatan Rutin"],
+        mode="markers+text",
+        text=profile_df["Skema"],
+        textposition="top center",
+        textfont=dict(size=14, color="#44403c"),
+        marker=dict(
+            size=20,
+            color=[
+                "#9a3412",
+                "#f97316",
+                "#7c2d12",
+            ],
+            line=dict(width=2, color="#ffffff"),
+        ),
+        name="Skema",
+    )
+)
+
+fig_tradeoff.update_layout(
+    template="plotly_white",
+    xaxis_title="Dana Diterima di Awal (Rp)",
+    yaxis_title=f"Manfaat Bulanan pada Usia {target_age} (Rp)",
+    margin=dict(l=20, r=20, t=48, b=24),
+    font=dict(
+        family="Plus Jakarta Sans, sans-serif",
+        size=16,
+        color="#1c1917"
+    ),
+    height=480,
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    showlegend=False,
+)
+
+fig_tradeoff.update_xaxes(
+    showgrid=True,
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
+)
+
+fig_tradeoff.update_yaxes(
+    showgrid=True,
+    gridwidth=1,
+    gridcolor="#f5ebe0",
+    title_font=dict(size=15, color="#44403c"),
+    tickfont=dict(size=14),
+)
+
+st.plotly_chart(
+    fig_tradeoff,
+    width='stretch',
+)
+
+st.markdown(
+    """
+    <div class="insight-card">
+
+        <div class="insight-title">
+            Cara Membaca Grafik
+        </div>
+
+        <div class="insight-text">
+
+            <b>MPB</b> berada pada sisi pendapatan rutin karena
+            tidak memberikan dana sekaligus di awal.
+
+            <b>Mix</b> berada di antara keduanya karena memberikan
+            dana sekaligus sekaligus tetap menyediakan manfaat bulanan.
+
+            <b>MPS</b> berada pada sisi dana awal karena seluruh
+            manfaat dibayarkan sekaligus dan tidak terdapat
+            manfaat bulanan.
+
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 4 — MILESTONE PERUBAHAN POSISI SKEMA
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Perubahan Posisi Skema Berdasarkan Usia</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <div class="section-note">
+        Tabel ini memperlihatkan skema dengan akumulasi nominal tertinggi
+        pada beberapa titik usia. Tujuannya untuk melihat apakah posisi
+        relatif MPB, Mix, dan MPS berubah seiring bertambahnya usia.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Ambil titik usia tahunan dari data simulasi.
+milestone_rows = []
+
+for age in sorted(
+    set(
+        sim_df["Usia"].round(0).astype(int)
+    )
+):
+
+    row_candidates = sim_df[
+        sim_df["Usia"].round(0).astype(int) == age
+    ]
+
+    if row_candidates.empty:
+        continue
+
+    row = row_candidates.iloc[-1]
+
+    milestone_values = {
+        "MPB 100% Bulanan": float(row["MPB Kumulatif"]),
+        "Mix 20% + 80%": float(row["Mix Kumulatif"]),
+        "MPS 100% Sekaligus": float(row["MPS Kumulatif"]),
+    }
+
+    milestone_winner = max(
+        milestone_values,
+        key=milestone_values.get
+    )
+
+    milestone_rows.append(
+        {
+            "Usia": age,
+            "Skema Tertinggi": milestone_winner,
+            "MPB": milestone_values["MPB 100% Bulanan"],
+            "Mix": milestone_values["Mix 20% + 80%"],
+            "MPS": milestone_values["MPS 100% Sekaligus"],
+        }
+    )
+
+milestone_df = pd.DataFrame(milestone_rows)
+
+# Kurangi jumlah baris agar tabel tetap ringkas.
+if not milestone_df.empty:
+
+    selected_milestones = set()
+
+    for _, row in milestone_df.iterrows():
+
+        age = int(row["Usia"])
+
+        # Ambil usia awal, target, dan setiap 5 tahun.
+        if (
+            age == int(round(retirement_age))
+            or age == int(round(target_age))
+            or (
+                (age - int(round(retirement_age))) % 5 == 0
+            )
+        ):
+            selected_milestones.add(age)
+
+    milestone_display = milestone_df[
+        milestone_df["Usia"].isin(selected_milestones)
+    ].copy()
+
+    milestone_display["MPB"] = milestone_display["MPB"].apply(rupiah)
+    milestone_display["Mix"] = milestone_display["Mix"].apply(rupiah)
+    milestone_display["MPS"] = milestone_display["MPS"].apply(rupiah)
+
+    st.dataframe(
+        milestone_display,
+        hide_index=True,
+        width="stretch"
+    )
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 5 — DAMPAK KENAIKAN 3%
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Dampak Kenaikan Manfaat 3% per Bulan</div>',
+    unsafe_allow_html=True
+)
+
+mpb_flat_target = mpb
+mix_flat_target = mix_monthly
+
+mpb_growth_impact = (
+    mpb_monthly_target - mpb_flat_target
+)
+
+mix_growth_impact = (
+    mix_monthly_target - mix_flat_target
+)
+
+growth1, growth2 = st.columns(2, gap="large")
+
+
+with growth1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Dampak Kenaikan pada MPB
+            </div>
+
+            <div class="insight-main">
+                +{rupiah(mpb_growth_impact)}
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age}, manfaat bulanan MPB
+                diproyeksikan lebih tinggi sebesar
+                <b>{rupiah(mpb_growth_impact)}</b>
+                dibandingkan nilai awal {rupiah(mpb)}.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with growth2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Dampak Kenaikan pada Mix
+            </div>
+
+            <div class="insight-main">
+                +{rupiah(mix_growth_impact)}
+            </div>
+
+            <div class="insight-text">
+                Pada usia {target_age}, manfaat bulanan Mix
+                diproyeksikan lebih tinggi sebesar
+                <b>{rupiah(mix_growth_impact)}</b>
+                dibandingkan nilai awal {rupiah(mix_monthly)}.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# INSIGHT TAMBAHAN 6 — KONTRIBUSI BHR TERHADAP TOTAL
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+st.markdown(
+    '<div class="section-title">Kontribusi BHR terhadap Total Penerimaan</div>',
+    unsafe_allow_html=True
+)
+
+mpb_bhr_share = (
+    mpb_bhr_total / mpb_total * 100
+    if mpb_total > 0 else 0
+)
+
+mix_bhr_share = (
+    mix_bhr_total / mix_total * 100
+    if mix_total > 0 else 0
+)
+
+bhr1, bhr2 = st.columns(2, gap="large")
+
+
+with bhr1:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPB
+            </div>
+
+            <div class="insight-main">
+                {mpb_bhr_share:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Dari total penerimaan MPB sampai usia
+                {target_age}, sekitar
+                <b>{mpb_bhr_share:.1f}%</b>
+                berasal dari BHR.
+                Total BHR: <b>{rupiah(mpb_bhr_total)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with bhr2:
+
+    st.markdown(
+        f"""
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Mix
+            </div>
+
+            <div class="insight-main">
+                {mix_bhr_share:.1f}%
+            </div>
+
+            <div class="insight-text">
+                Dari total penerimaan Mix sampai usia
+                {target_age}, sekitar
+                <b>{mix_bhr_share:.1f}%</b>
+                berasal dari BHR.
+                Total BHR: <b>{rupiah(mix_bhr_total)}</b>.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# FINAL SUMMARY
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">Ringkasan Analisis</div>',
+    unsafe_allow_html=True
+)
+
+
+if winner == "MPB 100% Bulanan":
+
+    summary = (
+        f"Pada usia tujuan {target_age} tahun, "
+        f"MPB 100% Bulanan menghasilkan akumulasi "
+        f"nominal tertinggi sebesar {rupiah(mpb_total)}. "
+        f"Selain manfaat bulanan yang meningkat 3% setiap bulan, "
+        f"MPB juga memperoleh BHR sebesar Rp5 juta setiap tahun."
+    )
+
+elif winner == "Mix 20% + 80%":
+
+    summary = (
+        f"Pada usia tujuan {target_age} tahun, "
+        f"Skema Mix menghasilkan akumulasi nominal tertinggi "
+        f"sebesar {rupiah(mix_total)}. "
+        f"Skema ini menggabungkan dana sekaligus di awal, "
+        f"manfaat bulanan yang meningkat 3% setiap bulan, "
+        f"serta BHR Rp5 juta setiap tahun."
+    )
+
+else:
+
+    summary = (
+        f"Pada usia tujuan {target_age} tahun, "
+        f"MPS 100% Sekaligus menghasilkan akumulasi nominal "
+        f"tertinggi sebesar {rupiah(mps_total)}. "
+        f"Keunggulan utama skema ini adalah seluruh manfaat "
+        f"diterima di awal, tetapi tidak memiliki manfaat "
+        f"bulanan maupun BHR setelah pencairan."
+    )
+
+
+st.markdown(
+    f"""
+    <div class="info-box">
+
+        <b>Kesimpulan:</b>
+
+        {summary}
+
+        <b>Catatan:</b>
+        Hasil ini merupakan simulasi berdasarkan asumsi
+        kenaikan manfaat bulanan 3% dan BHR Rp5 juta per tahun.
+        Nilai aktual dapat berbeda apabila terdapat ketentuan
+        lain dalam perhitungan manfaat pensiun.
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.markdown(
+    """
+    <br>
+    <div style="
+        text-align:center;
+        color:#78716c;
+        font-size:0.82rem;
+        font-weight:500;
+        padding:32px 0 16px;
+        border-top:1px solid #f5ebe0;
+        margin-top:40px;
+    ">
+        Dashboard Analisis Manfaat Pensiun DPBNI
     </div>
     """,
     unsafe_allow_html=True,
