@@ -119,8 +119,18 @@ st.markdown(
         background: var(--surface-alt);
     }
 
+    main .block-container {
+        max-width: 1420px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
     p, li, span {
         color: var(--text-body);
+    }
+
+    div[data-testid="stVerticalBlock"] > div {
+        padding-bottom: 0.25rem;
     }
 
 
@@ -195,9 +205,12 @@ st.markdown(
     .section-title {
         font-size: 1.5rem;
         font-weight: 800;
-        color: var(--text-dark);
-        margin-top: 40px;
-        margin-bottom: 20px;
+        color: var(--primary-800);
+        margin-top: 0.75rem;
+        margin-bottom: 1.2rem;
+        padding-top: 1.3rem;
+        padding-left: 0.35rem;
+        border-top: 1px solid var(--border-light);
         letter-spacing: -0.01em;
         line-height: 1.3;
     }
@@ -206,20 +219,24 @@ st.markdown(
         color: var(--text-muted);
         font-size: 1rem;
         line-height: 1.7;
-        margin-bottom: 24px;
+        margin-bottom: 1.5rem;
+        max-width: 880px;
     }
 
 
     /* ================= METRIC CARD ================= */
 
     .metric-card {
-        background: var(--surface);
+        background: linear-gradient(180deg, #ffffff 0%, #fffaf5 100%);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 24px;
+        padding: 22px 18px;
         box-shadow: var(--shadow-md);
-        min-height: 120px;
+        min-height: 138px;
         transition: box-shadow 0.2s ease;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
     }
 
     .metric-card:hover {
@@ -255,48 +272,29 @@ st.markdown(
     /* ================= SCHEME CARD ================= */
 
     .scheme-card {
-        background: var(--surface);
+        background: linear-gradient(180deg, #ffffff 0%, #fffaf6 100%);
         border-radius: var(--radius-xl);
         padding: 28px 24px;
-        min-height: 340px;
+        min-height: 420px;
         box-shadow: var(--shadow-md);
         border: 1px solid var(--border);
         transition: box-shadow 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        position: relative;
     }
 
     .scheme-card:hover {
         box-shadow: var(--shadow-lg);
     }
 
-    .scheme-blue {
-        border-top: 5px solid var(--primary-400);
-    }
-
-    .scheme-orange {
-        border-top: 5px solid var(--primary-600);
-    }
-
-    .scheme-purple {
-        border-top: 5px solid var(--primary-800);
-    }
-
     .scheme-title {
         font-size: 1.15rem;
         font-weight: 800;
+        color: var(--primary-700);
         margin-bottom: 16px;
         letter-spacing: -0.005em;
-    }
-
-    .scheme-blue .scheme-title {
-        color: var(--primary-500);
-    }
-
-    .scheme-orange .scheme-title {
-        color: var(--primary-700);
-    }
-
-    .scheme-purple .scheme-title {
-        color: var(--primary-900);
+        text-align: center;
     }
 
     .scheme-label {
@@ -320,21 +318,30 @@ st.markdown(
         color: var(--text-muted);
         font-size: 0.95rem;
         line-height: 1.7;
-        margin-top: 20px;
+        margin-top: auto;
         padding-top: 16px;
         border-top: 1px solid var(--border-light);
+        min-height: 108px;
+        display: flex;
+        align-items: flex-end;
     }
 
 
     /* ================= INSIGHT ================= */
 
     .insight-card {
-        background: var(--surface);
+        background: linear-gradient(180deg, #ffffff 0%, #fffaf5 100%);
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        padding: 24px;
+        padding: 22px 20px;
         box-shadow: var(--shadow-md);
         transition: box-shadow 0.2s ease;
+        min-height: 190px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        text-align: center;
+        position: relative;
     }
 
     .insight-card:hover {
@@ -347,15 +354,17 @@ st.markdown(
         color: var(--text-label);
         text-transform: uppercase;
         letter-spacing: 0.06em;
+        text-align: center;
     }
 
     .insight-main {
-        font-size: 1.35rem;
+        font-size: 1.25rem;
         font-weight: 800;
         color: var(--primary-700);
         margin-top: 8px;
         letter-spacing: -0.01em;
         line-height: 1.3;
+        text-align: center;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -366,10 +375,50 @@ st.markdown(
         font-size: 0.95rem;
         line-height: 1.75;
         margin-top: 12px;
+        text-align: center;
     }
 
 
-    /* ================= INFO / WARNING / SUCCESS BOX ================= */
+    /* ================= STAT ROW (label + angka berdampingan) ================= */
+    /* Dipakai untuk mengganti teks yang digabung jadi satu paragraf
+       (mis. "MPB 80% kebutuhan Mix 90% kebutuhan") menjadi baris-baris
+       terpisah yang jelas dan mudah dipindai matanya. */
+
+    .stat-list {
+        margin-top: 14px;
+    }
+
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+        border-bottom: 1px solid var(--primary-100);
+    }
+
+    .stat-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .stat-row:first-child {
+        padding-top: 0;
+    }
+
+    .stat-row-label {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--text-muted);
+    }
+
+    .stat-row-value {
+        font-size: 1.02rem;
+        font-weight: 800;
+        color: var(--primary-700);
+        text-align: right;
+        white-space: nowrap;
+    }
 
     .info-box {
         background: var(--primary-50);
@@ -381,6 +430,7 @@ st.markdown(
         font-size: 1rem;
         line-height: 1.75;
         margin: 16px 0;
+        text-align: center;
     }
 
     .warning-box {
@@ -405,6 +455,12 @@ st.markdown(
         font-size: 1rem;
         line-height: 1.75;
         margin: 16px 0;
+    }
+
+    .success-box > b:first-child,
+    .warning-box > b:first-child {
+        display: block;
+        text-align: center;
     }
 
 
@@ -533,21 +589,24 @@ st.markdown(
 
     /* General Streamlit headings */
     h1 {
-        color: var(--text-dark);
+        color: var(--primary-800);
         font-weight: 800;
         letter-spacing: -0.02em;
+        margin-bottom: 0.35rem;
     }
 
     h2 {
-        color: var(--text-dark);
+        color: var(--primary-800);
         font-weight: 800;
         letter-spacing: -0.01em;
+        margin-bottom: 0.5rem;
     }
 
     h3 {
-        color: var(--text-dark);
+        color: var(--primary-800);
         font-weight: 700;
         font-size: 1.25rem;
+        margin-bottom: 0.55rem;
     }
 
     /* Caption: slightly enlarged for readability */
@@ -568,6 +627,7 @@ st.markdown(
         font-size: 1rem !important;
         font-weight: 600 !important;
         color: var(--text-muted) !important;
+        text-align: center !important;
     }
 
     /* Progress bar & spinner: orange theme */
@@ -586,7 +646,7 @@ st.markdown(
 
     div[data-testid*="HorizontalBlock"] {
         align-items: stretch !important;
-        gap: 16px;
+        gap: 18px;
     }
 
     div[data-testid*="HorizontalBlock"] > div {
@@ -640,6 +700,12 @@ st.markdown(
         border: none;
         border-top: 1px solid var(--border-light);
         margin: 32px 0;
+    }
+
+    /* Consistent vertical rhythm between sections, replacing
+       ad-hoc <br> spacers with a single predictable gap. */
+    .section-spacer {
+        height: 8px;
     }
 
 
@@ -1079,8 +1145,7 @@ with st.sidebar:
     st.markdown("## Kontrol Simulasi")
 
     st.caption(
-        "Pilih peserta dan usia tujuan untuk melihat "
-        "estimasi penerimaan manfaat pensiun."
+        "Pilih peserta dan usia tujuan untuk melihat estimasi penerimaan manfaat pensiun."
     )
 
     participant_values = (
@@ -1145,9 +1210,9 @@ with st.sidebar:
     st.markdown(
         f"""
         <div class="info-box">
-            <b>Periode Analisis</b><br>
+            <b>Periode Analisis</b>
             Usia {retirement_age_sidebar:.0f}
-            → Usia {target_age}
+            sampai Usia {target_age}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1166,7 +1231,7 @@ with st.sidebar:
         ">
         <b>3% per bulan</b><br>
         Manfaat bulanan MPB dan Mix meningkat
-        3% setiap bulan.
+        3% setiap bulan.<br><br>
 
         <b>BHR Rp5 juta/tahun</b><br>
         Bantuan Hari Raya sebesar Rp5.000.000
@@ -1253,7 +1318,7 @@ render_html(
 
         <div class="hero-subtitle">
             Dashboard analitik untuk melihat perkembangan
-            manfaat pensiun berdasarkan usia, dengan
+            manfaat pensiun berdasarkan estimasi usia, dengan
             memperhitungkan kenaikan manfaat bulanan 3%
             dan Bantuan Hari Raya sebesar Rp5 juta per tahun.
         </div>
@@ -1452,42 +1517,32 @@ with col1:
 
     st.markdown(
         f"""
-        <div class="scheme-card scheme-blue">
+        <div class="scheme-card">
 
             <div class="scheme-title">
-                MPB — 100% Bulanan
+                MPB (100% Bulanan)
             </div>
 
-            <div class="scheme-label">
-                Manfaat Bulanan Awal
-            </div>
+            <div class="stat-list">
+                <div class="stat-row">
+                    <span class="stat-row-label">Manfaat Bulanan Awal</span>
+                    <span class="stat-row-value">{rupiah(mpb)}</span>
+                </div>
 
-            <div class="scheme-value">
-                {rupiah(mpb)}
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Usia {target_age}</span>
+                    <span class="stat-row-value">{rupiah(mpb_monthly_target)}</span>
+                </div>
 
-            <div class="scheme-label">
-                Manfaat Bulanan pada Usia {target_age}
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Total BHR</span>
+                    <span class="stat-row-value">{rupiah(mpb_bhr_total)}</span>
+                </div>
 
-            <div class="scheme-value">
-                {rupiah(mpb_monthly_target)}
-            </div>
-
-            <div class="scheme-label">
-                Total BHR
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mpb_bhr_total)}
-            </div>
-
-            <div class="scheme-label">
-                Total Penerimaan
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mpb_total)}
+                <div class="stat-row">
+                    <span class="stat-row-label">Total Penerimaan</span>
+                    <span class="stat-row-value">{rupiah(mpb_total)}</span>
+                </div>
             </div>
 
             <div class="scheme-description">
@@ -1511,50 +1566,37 @@ with col2:
 
     st.markdown(
         f"""
-        <div class="scheme-card scheme-orange">
+        <div class="scheme-card">
 
             <div class="scheme-title">
-                Mix — 20% Sekaligus + 80% Bulanan
+                Mix (20% Sekaligus + 80% Bulanan)
             </div>
 
-            <div class="scheme-label">
-                Dana Sekaligus Awal
-            </div>
+            <div class="stat-list">
+                <div class="stat-row">
+                    <span class="stat-row-label">Dana Sekaligus Awal</span>
+                    <span class="stat-row-value">{rupiah(mix_lump)}</span>
+                </div>
 
-            <div class="scheme-value">
-                {rupiah(mix_lump)}
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Manfaat Bulanan Awal</span>
+                    <span class="stat-row-value">{rupiah(mix_monthly)}</span>
+                </div>
 
-            <div class="scheme-label">
-                Manfaat Bulanan Awal
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Usia {target_age}</span>
+                    <span class="stat-row-value">{rupiah(mix_monthly_target)}</span>
+                </div>
 
-            <div class="scheme-value">
-                {rupiah(mix_monthly)}
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Total BHR</span>
+                    <span class="stat-row-value">{rupiah(mix_bhr_total)}</span>
+                </div>
 
-            <div class="scheme-label">
-                Manfaat Bulanan pada Usia {target_age}
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mix_monthly_target)}
-            </div>
-
-            <div class="scheme-label">
-                Total BHR
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mix_bhr_total)}
-            </div>
-
-            <div class="scheme-label">
-                Total Penerimaan
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mix_total)}
+                <div class="stat-row">
+                    <span class="stat-row-label">Total Penerimaan</span>
+                    <span class="stat-row-value">{rupiah(mix_total)}</span>
+                </div>
             </div>
 
             <div class="scheme-description">
@@ -1578,42 +1620,32 @@ with col3:
 
     st.markdown(
         f"""
-        <div class="scheme-card scheme-purple">
+        <div class="scheme-card">
 
             <div class="scheme-title">
-                MPS — 100% Sekaligus
+                MPS (100% Sekaligus)
             </div>
 
-            <div class="scheme-label">
-                Dana Diterima di Awal
-            </div>
+            <div class="stat-list">
+                <div class="stat-row">
+                    <span class="stat-row-label">Dana Diterima di Awal</span>
+                    <span class="stat-row-value">{rupiah(mps)}</span>
+                </div>
 
-            <div class="scheme-value">
-                {rupiah(mps)}
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Manfaat Bulanan</span>
+                    <span class="stat-row-value">Rp0</span>
+                </div>
 
-            <div class="scheme-label">
-                Manfaat Bulanan
-            </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">BHR</span>
+                    <span class="stat-row-value">Rp0</span>
+                </div>
 
-            <div class="scheme-value">
-                Rp0
-            </div>
-
-            <div class="scheme-label">
-                BHR
-            </div>
-
-            <div class="scheme-value">
-                Rp0
-            </div>
-
-            <div class="scheme-label">
-                Total Penerimaan
-            </div>
-
-            <div class="scheme-value">
-                {rupiah(mps_total)}
+                <div class="stat-row">
+                    <span class="stat-row-label">Total Penerimaan</span>
+                    <span class="stat-row-value">{rupiah(mps_total)}</span>
+                </div>
             </div>
 
             <div class="scheme-description">
@@ -1896,7 +1928,7 @@ with growth_col2:
         <div class="insight-card">
 
             <div class="insight-title">
-                Mix — Komponen Bulanan
+                Mix (Komponen Bulanan)
             </div>
 
             <div class="insight-main">
@@ -1963,7 +1995,7 @@ with be1:
                 <b>MPB vs Mix</b>
                 MPB mulai menyamai/melewati Mix
                 sekitar usia
-                <b>{be_mpb_mix:.1f} tahun</b>.
+                <b>{be_mpb_mix:.1f} tahun</b>
             </div>
             """,
             unsafe_allow_html=True
@@ -1993,7 +2025,7 @@ with be2:
                 <b>MPB vs MPS</b>
                 MPB mulai menyamai/melewati MPS
                 sekitar usia
-                <b>{be_mpb_mps:.1f} tahun</b>.
+                <b>{be_mpb_mps:.1f} tahun</b>
             </div>
             """,
             unsafe_allow_html=True
@@ -2023,7 +2055,7 @@ with be3:
                 <b>Mix vs MPS</b>
                 Mix mulai menyamai/melewati MPS
                 sekitar usia
-                <b>{be_mix_mps:.1f} tahun</b>.
+                <b>{be_mix_mps:.1f} tahun</b>
             </div>
             """,
             unsafe_allow_html=True
@@ -2070,7 +2102,16 @@ comparison_df = pd.DataFrame(
 
 
 st.dataframe(
-    comparison_df,
+    comparison_df.style.set_properties(
+        **{"text-align": "center"}
+    ).set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [("text-align", "center")]
+            }
+        ]
+    ),
     hide_index=True,
     width="stretch",
 )
@@ -2462,7 +2503,7 @@ with coverage2:
 # =========================================================
 
 st.markdown(
-    "<br>",
+    "<div class=\"section-spacer\"></div>",
     unsafe_allow_html=True
 )
 
@@ -2481,7 +2522,7 @@ with initial1:
         <div class="insight-card">
 
             <div class="insight-title">
-                Mix — Dana Sekaligus
+                Mix (Dana Sekaligus)
             </div>
 
             <div class="insight-main">
@@ -2510,7 +2551,7 @@ with initial2:
         <div class="insight-card">
 
             <div class="insight-title">
-                MPS — Dana Sekaligus
+                MPS (Dana Sekaligus)
             </div>
 
             <div class="insight-main">
@@ -2535,7 +2576,7 @@ with initial2:
 # PROFIL KEBUTUHAN PESERTA
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Profil Kebutuhan Peserta</div>',
@@ -2665,16 +2706,22 @@ with profile2:
                 Coverage Pendapatan Bulanan
             </div>
 
-            <div class="insight-text">
+            <div class="stat-list">
 
-                <b>MPB</b><br>
-                {mpb_monthly_coverage:.1f}% kebutuhan
+                <div class="stat-row">
+                    <span class="stat-row-label">MPB</span>
+                    <span class="stat-row-value">{mpb_monthly_coverage:.1f}% kebutuhan</span>
+                </div>
 
-                <b>Mix</b><br>
-                {mix_monthly_coverage:.1f}% kebutuhan
+                <div class="stat-row">
+                    <span class="stat-row-label">Mix</span>
+                    <span class="stat-row-value">{mix_monthly_coverage:.1f}% kebutuhan</span>
+                </div>
 
-                <b>MPS</b><br>
-                Tidak memiliki manfaat bulanan
+                <div class="stat-row">
+                    <span class="stat-row-label">MPS</span>
+                    <span class="stat-row-value">Tidak ada manfaat bulanan</span>
+                </div>
 
             </div>
 
@@ -2693,13 +2740,17 @@ with profile3:
                 Coverage Dana Awal
             </div>
 
-            <div class="insight-text">
+            <div class="stat-list">
 
-                <b>Mix</b><br>
-                {mix_initial_coverage:.1f}% kebutuhan dana awal
+                <div class="stat-row">
+                    <span class="stat-row-label">Mix</span>
+                    <span class="stat-row-value">{mix_initial_coverage:.1f}% kebutuhan</span>
+                </div>
 
-                <b>MPS</b><br>
-                {mps_initial_coverage:.1f}% kebutuhan dana awal
+                <div class="stat-row">
+                    <span class="stat-row-label">MPS</span>
+                    <span class="stat-row-value">{mps_initial_coverage:.1f}% kebutuhan</span>
+                </div>
 
             </div>
 
@@ -2713,7 +2764,7 @@ with profile3:
 # KARAKTERISTIK SKEMA TERHADAP PROFIL
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Karakteristik Skema terhadap Kebutuhan Peserta</div>',
@@ -2816,10 +2867,10 @@ with scheme1:
 
     st.markdown(
         f"""
-        <div class="insight-card" style="border-top:4px solid #c2410c;">
+        <div class="insight-card">
 
             <div class="insight-title">
-                MPB — Pendapatan Rutin
+                MPB (Pendapatan Rutin)
             </div>
 
             <div class="insight-text">
@@ -2836,10 +2887,10 @@ with scheme2:
 
     st.markdown(
         f"""
-        <div class="insight-card" style="border-top:4px solid #f97316;">
+        <div class="insight-card">
 
             <div class="insight-title">
-                Mix — Kombinasi
+                Mix (Kombinasi)
             </div>
 
             <div class="insight-text">
@@ -2856,10 +2907,10 @@ with scheme3:
 
     st.markdown(
         f"""
-        <div class="insight-card" style="border-top:4px solid #7c2d12;">
+        <div class="insight-card">
 
             <div class="insight-title">
-                MPS — Likuiditas Awal
+                MPS (Likuiditas Awal)
             </div>
 
             <div class="insight-text">
@@ -2876,48 +2927,80 @@ with scheme3:
 # PANDUAN MEMBACA HASIL
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
-
 st.markdown(
-    """
-    <div class="insight-card">
-
-        <div class="insight-title">
-            Panduan Membaca Hasil
-        </div>
-
-        <div class="insight-text">
-
-            <p>
-                <b>MPB</b> lebih berorientasi pada pendapatan rutin,
-                sehingga indikator utama yang perlu diperhatikan adalah
-                manfaat bulanan dan kemampuannya memenuhi kebutuhan hidup.
-            </p>
-
-            <p>
-                <b>Mix</b> berada di tengah karena memberikan dua bentuk
-                penerimaan: dana sekaligus di awal dan manfaat bulanan.
-            </p>
-
-            <p>
-                <b>MPS</b> lebih berorientasi pada likuiditas awal karena
-                seluruh manfaat diterima sekaligus dan tidak ada manfaat
-                bulanan berikutnya.
-            </p>
-
-        </div>
-
-    </div>
-    """,
+    '<div class="section-title">Panduan Membaca Hasil</div>',
     unsafe_allow_html=True
 )
+
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
+
+guide1, guide2, guide3 = st.columns(3, gap="large")
+
+with guide1:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Panduan MPB
+            </div>
+
+            <div class="insight-text">
+                Lebih berorientasi pada pendapatan rutin, sehingga
+                indikator utama yang perlu diperhatikan adalah manfaat
+                bulanan dan kemampuannya memenuhi kebutuhan hidup.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with guide2:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Panduan Mix
+            </div>
+
+            <div class="insight-text">
+                Berada di tengah karena memberikan dua bentuk penerimaan:
+                dana sekaligus di awal dan manfaat bulanan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with guide3:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Panduan MPS
+            </div>
+
+            <div class="insight-text">
+                Lebih berorientasi pada likuiditas awal karena seluruh
+                manfaat diterima sekaligus dan tidak ada manfaat
+                bulanan berikutnya.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 # =========================================================
 # INSIGHT TAMBAHAN 1 — USIA SAAT KEBUTUHAN BULANAN TERCAPAI
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Usia Saat Manfaat Bulanan Mencapai Kebutuhan</div>',
@@ -2995,7 +3078,7 @@ with age_col1:
                 <b>MPB</b>
                 Manfaat bulanan MPB pertama kali mencapai
                 kebutuhan <b>{rupiah(monthly_need)}</b>
-                sekitar usia <b>{mpb_need_age:.1f} tahun</b>.
+                sekitar usia <b>{mpb_need_age:.1f} tahun.</b>
             </div>
             """,
             unsafe_allow_html=True
@@ -3026,7 +3109,7 @@ with age_col2:
                 <b>Mix</b>
                 Manfaat bulanan Mix pertama kali mencapai
                 kebutuhan <b>{rupiah(monthly_need)}</b>
-                sekitar usia <b>{mix_need_age:.1f} tahun</b>.
+                sekitar usia <b>{mix_need_age:.1f} tahun.</b>
             </div>
             """,
             unsafe_allow_html=True
@@ -3037,7 +3120,7 @@ with age_col2:
 # INSIGHT TAMBAHAN 2 — DANA AWAL SETARA BERAPA BULAN KEBUTUHAN
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Dana Awal Setara Berapa Bulan Kebutuhan?</div>',
@@ -3065,7 +3148,7 @@ with months_col1:
         <div class="insight-card">
 
             <div class="insight-title">
-                Mix — Dana Sekaligus
+                Mix (Dana Sekaligus)
             </div>
 
             <div class="insight-main">
@@ -3093,7 +3176,7 @@ with months_col2:
         <div class="insight-card">
 
             <div class="insight-title">
-                MPS — Dana Sekaligus
+                MPS (Dana Sekaligus)
             </div>
 
             <div class="insight-main">
@@ -3118,7 +3201,7 @@ with months_col2:
 # INSIGHT TAMBAHAN 3 — PENDAPATAN RUTIN VS DANA AWAL
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Profil Penerimaan: Pendapatan Rutin vs Dana Awal</div>',
@@ -3217,39 +3300,78 @@ st.plotly_chart(
     width='stretch',
 )
 
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
+
 st.markdown(
-    """
-    <div class="insight-card">
-
-        <div class="insight-title">
-            Cara Membaca Grafik
-        </div>
-
-        <div class="insight-text">
-
-            <b>MPB</b> berada pada sisi pendapatan rutin karena
-            tidak memberikan dana sekaligus di awal.
-
-            <b>Mix</b> berada di antara keduanya karena memberikan
-            dana sekaligus sekaligus tetap menyediakan manfaat bulanan.
-
-            <b>MPS</b> berada pada sisi dana awal karena seluruh
-            manfaat dibayarkan sekaligus dan tidak terdapat
-            manfaat bulanan.
-
-        </div>
-
-    </div>
-    """,
+    '<div class="section-title">Cara Membaca Grafik</div>',
     unsafe_allow_html=True
 )
+
+read1, read2, read3 = st.columns(3, gap="large")
+
+with read1:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPB
+            </div>
+
+            <div class="insight-text">
+                Berada pada sisi pendapatan rutin karena tidak
+                memberikan dana sekaligus di awal.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with read2:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                Mix
+            </div>
+
+            <div class="insight-text">
+                Berada di antara keduanya karena memberikan dana
+                sekaligus sekaligus tetap menyediakan manfaat bulanan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+with read3:
+    st.markdown(
+        """
+        <div class="insight-card">
+
+            <div class="insight-title">
+                MPS
+            </div>
+
+            <div class="insight-text">
+                Berada pada sisi dana awal karena seluruh manfaat
+                dibayarkan sekaligus dan tidak terdapat manfaat bulanan.
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 # =========================================================
 # INSIGHT TAMBAHAN 4 — MILESTONE PERUBAHAN POSISI SKEMA
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Perubahan Posisi Skema Berdasarkan Usia</div>',
@@ -3336,7 +3458,16 @@ if not milestone_df.empty:
     milestone_display["MPS"] = milestone_display["MPS"].apply(rupiah)
 
     st.dataframe(
-        milestone_display,
+        milestone_display.style.set_properties(
+            **{"text-align": "center"}
+        ).set_table_styles(
+            [
+                {
+                    "selector": "th",
+                    "props": [("text-align", "center")]
+                }
+            ]
+        ),
         hide_index=True,
         width="stretch"
     )
@@ -3346,7 +3477,7 @@ if not milestone_df.empty:
 # INSIGHT TAMBAHAN 5 — DAMPAK KENAIKAN 3%
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Dampak Kenaikan Manfaat 3% per Bulan</div>',
@@ -3425,7 +3556,7 @@ with growth2:
 # INSIGHT TAMBAHAN 6 — KONTRIBUSI BHR TERHADAP TOTAL
 # =========================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
 st.markdown(
     '<div class="section-title">Kontribusi BHR terhadap Total Penerimaan</div>',
@@ -3547,17 +3678,23 @@ else:
 st.markdown(
     f"""
     <div class="info-box">
-
-        <b>Kesimpulan:</b>
-
+        <b>Kesimpulan</b>
         {summary}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-        <b>Catatan:</b>
-        Hasil ini merupakan simulasi berdasarkan asumsi
-        kenaikan manfaat bulanan 3% dan BHR Rp5 juta per tahun.
-        Nilai aktual dapat berbeda apabila terdapat ketentuan
-        lain dalam perhitungan manfaat pensiun.
+st.markdown("<div class=\"section-spacer\"></div>", unsafe_allow_html=True)
 
+st.markdown(
+    """
+    <div class="warning-box">
+        <b>Catatan</b>
+        Hasil ini merupakan simulasi berdasarkan asumsi kenaikan
+        manfaat bulanan 3% dan BHR Rp5 juta per tahun. Nilai aktual
+        dapat berbeda apabila terdapat ketentuan lain dalam
+        perhitungan manfaat pensiun.
     </div>
     """,
     unsafe_allow_html=True
